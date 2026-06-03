@@ -1,7 +1,9 @@
 [project]
 name = "topologiaminihub"
 version = "0.1.0"
-description = "Add your description here"
+description = "Topologia para red de minihub"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "mininet>=2.3.0.dev6",
+]
