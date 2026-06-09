@@ -14,6 +14,9 @@ class Warehouse:
         self.sw_piso1 = net.addSwitch('s1', failMode='standalone')
         self.sw_piso2 = net.addSwitch('s2', failMode='standalone')
 
+        # Switch de distribución
+        self.sw_dist = net.addSwitch('s4', failMode='standalone')
+
         # Switch capa 3 / multilayer
         self.mls = net.addSwitch('s3', cls=SwitchL3, failMode='standalone')
 
@@ -51,28 +54,22 @@ class Warehouse:
         net.addLink(self.cam2, self.sw_piso2)     # s2-eth4 -> VLAN 100
 
         # =========================
-        # Trunks hacia multilayer
+        # Enlaces access -> distribución
         # =========================
-        net.addLink(self.sw_piso1, self.mls)      # s1-eth6 <-> s3-eth1
-        net.addLink(self.sw_piso2, self.mls)      # s2-eth5 <-> s3-eth2
+        net.addLink(self.sw_piso1, self.sw_dist)  # s1-eth6 <-> s4-eth1
+        net.addLink(self.sw_piso2, self.sw_dist)  # s2-eth5 <-> s4-eth2
+
+        # =========================
+        # Enlace distribución -> multilayer
+        # =========================
+        net.addLink(self.sw_dist, self.mls)       # s4-eth3 <-> s3-eth1
 
         # =========================
         # Enlace multilayer -> router
         # =========================
-        net.addLink(self.mls, self.r_wh, intfName2='r_wh-eth0')  # s3-eth3 <-> r_wh-eth0
+        net.addLink(self.mls, self.r_wh, intfName2='r_wh-eth0')  # s3-eth2 <-> r_wh-eth0
 
     def create_svi(self, vlan_id, gateway_cidr):
-        """
-        Crea una SVI en el switch capa 3.
-
-        Ejemplo:
-            self.create_svi(70, '10.4.0.1/27')
-
-        Esto crea:
-            vlan70 = 10.4.0.1/27
-
-        Esa IP funciona como gateway de la VLAN 70.
-        """
         intf_name = f'vlan{vlan_id}'
 
         self.mls.cmd(
@@ -85,11 +82,6 @@ class Warehouse:
         self.mls.cmd(f'ip link set {intf_name} up')
 
     def configure(self):
-        """
-        Configura VLANs, trunks, SVIs, enlace MLS-router y rutas.
-        Se llama DESPUÉS de net.start().
-        """
-
         allowed_vlans = ','.join(str(vlan) for vlan in self.VLANS)
 
         # =========================
@@ -119,7 +111,7 @@ class Warehouse:
         self.sw_piso2.cmd('ovs-vsctl set port s2-eth4 tag=100')
 
         # =========================
-        # Trunks access -> multilayer
+        # Trunks access -> distribución
         # =========================
         self.sw_piso1.cmd(
             f'ovs-vsctl set port s1-eth6 vlan_mode=trunk trunks={allowed_vlans}'
@@ -130,14 +122,25 @@ class Warehouse:
         )
 
         # =========================
-        # Trunks en multilayer
+        # Trunks en switch de distribución
+        # =========================
+        self.sw_dist.cmd(
+            f'ovs-vsctl set port s4-eth1 vlan_mode=trunk trunks={allowed_vlans}'
+        )
+
+        self.sw_dist.cmd(
+            f'ovs-vsctl set port s4-eth2 vlan_mode=trunk trunks={allowed_vlans}'
+        )
+
+        self.sw_dist.cmd(
+            f'ovs-vsctl set port s4-eth3 vlan_mode=trunk trunks={allowed_vlans}'
+        )
+
+        # =========================
+        # Trunk distribución -> multilayer
         # =========================
         self.mls.cmd(
             f'ovs-vsctl set port s3-eth1 vlan_mode=trunk trunks={allowed_vlans}'
-        )
-
-        self.mls.cmd(
-            f'ovs-vsctl set port s3-eth2 vlan_mode=trunk trunks={allowed_vlans}'
         )
 
         # =========================
@@ -154,15 +157,14 @@ class Warehouse:
 
         # =========================
         # Enlace de tránsito MLS -> Router
-        # VLAN 999 será la red de tránsito:
+        # VLAN 999:
         # s3      = 10.4.1.253/30
         # r_wh    = 10.4.1.254/30
         # =========================
 
-        # El puerto s3-eth3 hacia el router será access VLAN 999
-        self.mls.cmd('ovs-vsctl set port s3-eth3 tag=999')
+        # Ahora el enlace al router es s3-eth2, no s3-eth3
+        self.mls.cmd('ovs-vsctl set port s3-eth2 tag=999')
 
-        # Crear SVI de tránsito vlan999 en s3
         self.mls.cmd(
             'ovs-vsctl --may-exist add-port s3 vlan999 '
             'tag=999 -- set interface vlan999 type=internal'
@@ -172,7 +174,6 @@ class Warehouse:
         self.mls.cmd('ip addr add 10.4.1.253/30 dev vlan999')
         self.mls.cmd('ip link set vlan999 up')
 
-        # IP del router en el enlace de tránsito
         self.r_wh.cmd('ip addr flush dev r_wh-eth0')
         self.r_wh.setIP('10.4.1.254/30', intf='r_wh-eth0')
         self.r_wh.cmd('ip link set r_wh-eth0 up')
@@ -180,11 +181,7 @@ class Warehouse:
         # =========================
         # Rutas
         # =========================
-
-        # El multilayer manda tráfico externo al router
         self.mls.cmd('ip route replace default via 10.4.1.254')
-
-        # El router sabe regresar al bloque del almacén
         self.r_wh.cmd('ip route replace 10.4.0.0/23 via 10.4.1.253')
 
         return self
