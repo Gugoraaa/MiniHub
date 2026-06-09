@@ -5,7 +5,7 @@ from switchL3 import SwitchL3
 class HQSite:
     VLANS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
 
-    SVI_GATEWAYS = {
+    SVIGATEWAYS = {
         10: '10.1.0.1/27',
         20: '10.1.0.33/27',
         30: '10.1.0.65/27',
@@ -29,13 +29,13 @@ class HQSite:
         self.gateway = net.addHost('hqr', cls=Router, ip=None)
 
         # Distribution switch
-        hq_dist = net.addSwitch('s0', failMode='standalone')
+        hdist = net.addSwitch('s0', failMode='standalone')
 
         # Access switches - one per floor
-        hq_f1 = net.addSwitch('s1', failMode='standalone')
-        hq_f2 = net.addSwitch('s2', failMode='standalone')
-        hq_f3 = net.addSwitch('s3', failMode='standalone')
-        hq_f4 = net.addSwitch('s4', failMode='standalone')
+        hf1 = net.addSwitch('s1', failMode='standalone')
+        hf2 = net.addSwitch('s2', failMode='standalone')
+        hf3 = net.addSwitch('s3', failMode='standalone')
+        hf4 = net.addSwitch('s4', failMode='standalone')
 
         # Switch capa 3 / multilayer
         self.mls = net.addSwitch('s5', cls=SwitchL3, failMode='standalone')
@@ -61,91 +61,91 @@ class HQSite:
         hphone = net.addHost('hphone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129')
 
         # Host-to-access-switch links
-        net.addLink(hit, hq_f1, port2=1)
-        net.addLink(hsales, hq_f1, port2=2)
-        net.addLink(hsec, hq_f1, port2=3)
+        net.addLink(hit, hf1, port2=1)
+        net.addLink(hsales, hf1, port2=2)
+        net.addLink(hsec, hf1, port2=3)
 
-        net.addLink(hmgmt, hq_f2, port2=1)
-        net.addLink(hhr, hq_f2, port2=2)
-        net.addLink(hfin, hq_f2, port2=3)
+        net.addLink(hmgmt, hf2, port2=1)
+        net.addLink(hhr, hf2, port2=2)
+        net.addLink(hfin, hf2, port2=3)
 
-        net.addLink(hinv, hq_f3, port2=1)
-        net.addLink(hcust, hq_f3, port2=2)
-        net.addLink(hpurch, hq_f3, port2=3)
+        net.addLink(hinv, hf3, port2=1)
+        net.addLink(hcust, hf3, port2=2)
+        net.addLink(hpurch, hf3, port2=3)
 
-        net.addLink(hcam, hq_f4, port2=1)
-        net.addLink(hprint, hq_f4, port2=2)
-        net.addLink(hphone, hq_f4, port2=3)
+        net.addLink(hcam, hf4, port2=1)
+        net.addLink(hprint, hf4, port2=2)
+        net.addLink(hphone, hf4, port2=3)
 
         # Access switches to distribution
-        net.addLink(hq_f1, hq_dist, port1=10, port2=1, bw=1000)
-        net.addLink(hq_f2, hq_dist, port1=10, port2=2, bw=1000)
-        net.addLink(hq_f3, hq_dist, port1=10, port2=3, bw=1000)
-        net.addLink(hq_f4, hq_dist, port1=10, port2=4, bw=1000)
+        net.addLink(hf1, hdist, port1=10, port2=1, bw=1000)
+        net.addLink(hf2, hdist, port1=10, port2=2, bw=1000)
+        net.addLink(hf3, hdist, port1=10, port2=3, bw=1000)
+        net.addLink(hf4, hdist, port1=10, port2=4, bw=1000)
 
         # Distribution to L3 switch, then L3 switch to WAN router
-        net.addLink(hq_dist, self.mls, port1=24, port2=1, bw=1000)
+        net.addLink(hdist, self.mls, port1=24, port2=1, bw=1000)
         net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0', bw=1000)
 
         # Save switches needed later for configure()
-        self.hq_dist = hq_dist
-        self.hq_f1 = hq_f1
-        self.hq_f2 = hq_f2
-        self.hq_f3 = hq_f3
-        self.hq_f4 = hq_f4
+        self.hdist = hdist
+        self.hf1 = hf1
+        self.hf2 = hf2
+        self.hf3 = hf3
+        self.hf4 = hf4
 
-    def create_svi(self, vlan_id, gateway_cidr):
-        intf_name = f'hqvlan{vlan_id}'
+    def createsvi(self, vlanid, gatewaycidr):
+        intfname = f'hqvlan{vlanid}'
 
         self.mls.cmd(
-            f'ovs-vsctl --may-exist add-port {self.mls.name} {intf_name} '
-            f'tag={vlan_id} -- set interface {intf_name} type=internal'
+            f'ovs-vsctl --may-exist add-port {self.mls.name} {intfname} '
+            f'tag={vlanid} -- set interface {intfname} type=internal'
         )
 
-        self.mls.cmd(f'ip addr flush dev {intf_name}')
-        self.mls.cmd(f'ip addr add {gateway_cidr} dev {intf_name}')
-        self.mls.cmd(f'ip link set {intf_name} up')
+        self.mls.cmd(f'ip addr flush dev {intfname}')
+        self.mls.cmd(f'ip addr add {gatewaycidr} dev {intfname}')
+        self.mls.cmd(f'ip link set {intfname} up')
 
     def configure(self):
-        allowed_vlans = ','.join(str(vlan) for vlan in self.VLANS)
+        allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)
 
         # Access ports - Floor 1
-        self.hq_f1.cmd('ovs-vsctl set port s1-eth1 tag=10')
-        self.hq_f1.cmd('ovs-vsctl set port s1-eth2 tag=20')
-        self.hq_f1.cmd('ovs-vsctl set port s1-eth3 tag=30')
-        self.hq_f1.cmd(f'ovs-vsctl set port s1-eth10 vlan_mode=trunk trunks={allowed_vlans}')
+        self.hf1.cmd('ovs-vsctl set port s1-eth1 tag=10')
+        self.hf1.cmd('ovs-vsctl set port s1-eth2 tag=20')
+        self.hf1.cmd('ovs-vsctl set port s1-eth3 tag=30')
+        self.hf1.cmd(f'ovs-vsctl set port s1-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Access ports - Floor 2
-        self.hq_f2.cmd('ovs-vsctl set port s2-eth1 tag=40')
-        self.hq_f2.cmd('ovs-vsctl set port s2-eth2 tag=50')
-        self.hq_f2.cmd('ovs-vsctl set port s2-eth3 tag=60')
-        self.hq_f2.cmd(f'ovs-vsctl set port s2-eth10 vlan_mode=trunk trunks={allowed_vlans}')
+        self.hf2.cmd('ovs-vsctl set port s2-eth1 tag=40')
+        self.hf2.cmd('ovs-vsctl set port s2-eth2 tag=50')
+        self.hf2.cmd('ovs-vsctl set port s2-eth3 tag=60')
+        self.hf2.cmd(f'ovs-vsctl set port s2-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Access ports - Floor 3
-        self.hq_f3.cmd('ovs-vsctl set port s3-eth1 tag=70')
-        self.hq_f3.cmd('ovs-vsctl set port s3-eth2 tag=80')
-        self.hq_f3.cmd('ovs-vsctl set port s3-eth3 tag=90')
-        self.hq_f3.cmd(f'ovs-vsctl set port s3-eth10 vlan_mode=trunk trunks={allowed_vlans}')
+        self.hf3.cmd('ovs-vsctl set port s3-eth1 tag=70')
+        self.hf3.cmd('ovs-vsctl set port s3-eth2 tag=80')
+        self.hf3.cmd('ovs-vsctl set port s3-eth3 tag=90')
+        self.hf3.cmd(f'ovs-vsctl set port s3-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Access ports - Floor 4
-        self.hq_f4.cmd('ovs-vsctl set port s4-eth1 tag=100')
-        self.hq_f4.cmd('ovs-vsctl set port s4-eth2 tag=110')
-        self.hq_f4.cmd('ovs-vsctl set port s4-eth3 tag=120')
-        self.hq_f4.cmd(f'ovs-vsctl set port s4-eth10 vlan_mode=trunk trunks={allowed_vlans}')
+        self.hf4.cmd('ovs-vsctl set port s4-eth1 tag=100')
+        self.hf4.cmd('ovs-vsctl set port s4-eth2 tag=110')
+        self.hf4.cmd('ovs-vsctl set port s4-eth3 tag=120')
+        self.hf4.cmd(f'ovs-vsctl set port s4-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Distribution trunks
-        self.hq_dist.cmd(f'ovs-vsctl set port s0-eth1 vlan_mode=trunk trunks={allowed_vlans}')
-        self.hq_dist.cmd(f'ovs-vsctl set port s0-eth2 vlan_mode=trunk trunks={allowed_vlans}')
-        self.hq_dist.cmd(f'ovs-vsctl set port s0-eth3 vlan_mode=trunk trunks={allowed_vlans}')
-        self.hq_dist.cmd(f'ovs-vsctl set port s0-eth4 vlan_mode=trunk trunks={allowed_vlans}')
-        self.hq_dist.cmd(f'ovs-vsctl set port s0-eth24 vlan_mode=trunk trunks={allowed_vlans}')
+        self.hdist.cmd(f'ovs-vsctl set port s0-eth1 vlan_mode=trunk trunks={allowedvlans}')
+        self.hdist.cmd(f'ovs-vsctl set port s0-eth2 vlan_mode=trunk trunks={allowedvlans}')
+        self.hdist.cmd(f'ovs-vsctl set port s0-eth3 vlan_mode=trunk trunks={allowedvlans}')
+        self.hdist.cmd(f'ovs-vsctl set port s0-eth4 vlan_mode=trunk trunks={allowedvlans}')
+        self.hdist.cmd(f'ovs-vsctl set port s0-eth24 vlan_mode=trunk trunks={allowedvlans}')
 
         # L3 switch trunk toward distribution
-        self.mls.cmd(f'ovs-vsctl set port s5-eth1 vlan_mode=trunk trunks={allowed_vlans}')
+        self.mls.cmd(f'ovs-vsctl set port s5-eth1 vlan_mode=trunk trunks={allowedvlans}')
 
         # Gateways / SVIs on the L3 switch
-        for vlan_id, gateway_cidr in self.SVI_GATEWAYS.items():
-            self.create_svi(vlan_id, gateway_cidr)
+        for vlanid, gatewaycidr in self.SVIGATEWAYS.items():
+            self.createsvi(vlanid, gatewaycidr)
 
         # Transit link L3 switch -> WAN router
         self.mls.cmd('ip addr flush dev s5-eth2')
