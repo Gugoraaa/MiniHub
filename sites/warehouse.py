@@ -93,6 +93,15 @@ class Warehouse:
         allowed_vlans = ','.join(str(vlan) for vlan in self.VLANS)
 
         # =========================
+        # Activar routing en s3
+        # =========================
+        self.mls.cmd('sysctl -w net.ipv4.ip_forward=1')
+        self.mls.cmd('sysctl -w net.ipv4.conf.all.rp_filter=0')
+        self.mls.cmd('sysctl -w net.ipv4.conf.default.rp_filter=0')
+        self.mls.cmd('iptables -P FORWARD ACCEPT')
+        self.mls.cmd('iptables -F FORWARD')
+
+        # =========================
         # Puertos access piso 1
         # =========================
         self.sw_piso1.cmd('ovs-vsctl set port s1-eth1 tag=70')
@@ -145,13 +154,27 @@ class Warehouse:
 
         # =========================
         # Enlace de tránsito MLS -> Router
+        # VLAN 999 será la red de tránsito:
+        # s3      = 10.4.1.253/30
+        # r_wh    = 10.4.1.254/30
         # =========================
-        self.mls.cmd('ip addr flush dev s3-eth3')
-        self.mls.cmd('ip addr add 10.4.1.253/30 dev s3-eth3')
-        self.mls.cmd('ip link set s3-eth3 up')
 
+        # El puerto s3-eth3 hacia el router será access VLAN 999
+        self.mls.cmd('ovs-vsctl set port s3-eth3 tag=999')
+
+        # Crear SVI de tránsito vlan999 en s3
+        self.mls.cmd(
+            'ovs-vsctl --may-exist add-port s3 vlan999 '
+            'tag=999 -- set interface vlan999 type=internal'
+        )
+
+        self.mls.cmd('ip addr flush dev vlan999')
+        self.mls.cmd('ip addr add 10.4.1.253/30 dev vlan999')
+        self.mls.cmd('ip link set vlan999 up')
+
+        # IP del router en el enlace de tránsito
         self.r_wh.cmd('ip addr flush dev r_wh-eth0')
-        self.r_wh.cmd('ip addr add 10.4.1.254/30 dev r_wh-eth0')
+        self.r_wh.setIP('10.4.1.254/30', intf='r_wh-eth0')
         self.r_wh.cmd('ip link set r_wh-eth0 up')
 
         # =========================
