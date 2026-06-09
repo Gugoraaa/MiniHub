@@ -1,4 +1,4 @@
-from mininet.net import OVSSwitch
+from mininet.node import OVSSwitch
 
 class SwitchL3(OVSSwitch):
     def config(self, **params):
