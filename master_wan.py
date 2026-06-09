@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
 
-import sys
-from pathlib import Path
-
 from mininet.cli import CLI
 from mininet.link import TCLink
 from mininet.log import setLogLevel
 from mininet.net import Mininet
 from mininet.node import OVSSwitch
 
-MINIHUB_DIR = Path(__file__).resolve().parent / 'MiniHub'
-sys.path.insert(0, str(MINIHUB_DIR))
-
 from sites.hq import HQSite
 
 
-def build_master():
+def buildmaster():
     net = Mininet(
         controller=None,
         switch=OVSSwitch,
@@ -32,13 +26,13 @@ def build_master():
 
     print('\n=== HQ topology loaded ===')
     print('Pruebas sugeridas dentro de Mininet:')
-    print('  hq_it ping -c 3 10.1.0.1')
-    print('  hq_it ping -c 3 hq_sales')
-    print('  hq_it ping -c 3 hq_finance')
-    print('  hq_finance ping -c 3 hq_camera')
-    print('  hq_sales ping -c 3 hq_phone')
+    print('  hit ping -c 3 10.1.0.1')
+    print('  hit ping -c 3 hsales')
+    print('  hit ping -c 3 hfin')
+    print('  hfin ping -c 3 hcam')
+    print('  hsales ping -c 3 hphone')
     print('  s5 ping -c 3 10.1.2.2')
-    print('  hq_it ping -c 3 10.1.2.2')
+    print('  hit ping -c 3 10.1.2.2')
     print('==========================\n')
 
     CLI(net)
@@ -47,4 +41,4 @@ def build_master():
 
 if __name__ == '__main__':
     setLogLevel('info')
-    build_master()
+    buildmaster()

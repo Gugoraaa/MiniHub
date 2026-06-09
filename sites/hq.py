@@ -26,7 +26,7 @@ class HQSite:
 
     def build(self, net):
         # HQ router WAN
-        self.gateway = net.addHost('hq_r', cls=Router, ip=None)
+        self.gateway = net.addHost('hqr', cls=Router, ip=None)
 
         # Distribution switch
         hq_dist = net.addSwitch('s0', failMode='standalone')
@@ -41,45 +41,41 @@ class HQSite:
         self.mls = net.addSwitch('s5', cls=SwitchL3, failMode='standalone')
 
         # Floor 1 representative hosts
-        hq_it = net.addHost('hq_it', ip='10.1.0.2/27', defaultRoute='via 10.1.0.1')
-        hq_sales = net.addHost('hq_sales', ip='10.1.0.34/27', defaultRoute='via 10.1.0.33')
-        hq_security = net.addHost('hq_security', ip='10.1.0.66/27', defaultRoute='via 10.1.0.65')
+        hit = net.addHost('hit', ip='10.1.0.2/27', defaultRoute='via 10.1.0.1')
+        hsales = net.addHost('hsales', ip='10.1.0.34/27', defaultRoute='via 10.1.0.33')
+        hsec = net.addHost('hsec', ip='10.1.0.66/27', defaultRoute='via 10.1.0.65')
 
         # Floor 2 representative hosts
-        hq_management = net.addHost('hq_management', ip='10.1.0.98/27', defaultRoute='via 10.1.0.97')
-        hq_hr = net.addHost('hq_hr', ip='10.1.0.130/27', defaultRoute='via 10.1.0.129')
-        hq_finance = net.addHost('hq_finance', ip='10.1.0.162/27', defaultRoute='via 10.1.0.161')
+        hmgmt = net.addHost('hmgmt', ip='10.1.0.98/27', defaultRoute='via 10.1.0.97')
+        hhr = net.addHost('hhr', ip='10.1.0.130/27', defaultRoute='via 10.1.0.129')
+        hfin = net.addHost('hfin', ip='10.1.0.162/27', defaultRoute='via 10.1.0.161')
 
         # Floor 3 representative hosts
-        hq_inventory = net.addHost('hq_inventory', ip='10.1.0.194/27', defaultRoute='via 10.1.0.193')
-        hq_customer_service = net.addHost(
-            'hq_customer_service',
-            ip='10.1.1.2/27',
-            defaultRoute='via 10.1.1.1',
-        )
-        hq_purchasing = net.addHost('hq_purchasing', ip='10.1.1.34/27', defaultRoute='via 10.1.1.33')
+        hinv = net.addHost('hinv', ip='10.1.0.194/27', defaultRoute='via 10.1.0.193')
+        hcust = net.addHost('hcust', ip='10.1.1.2/27', defaultRoute='via 10.1.1.1')
+        hpurch = net.addHost('hpurch', ip='10.1.1.34/27', defaultRoute='via 10.1.1.33')
 
         # Floor 4 representative hosts
-        hq_camera = net.addHost('hq_camera', ip='10.1.1.66/27', defaultRoute='via 10.1.1.65')
-        hq_printer = net.addHost('hq_printer', ip='10.1.1.98/27', defaultRoute='via 10.1.1.97')
-        hq_phone = net.addHost('hq_phone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129')
+        hcam = net.addHost('hcam', ip='10.1.1.66/27', defaultRoute='via 10.1.1.65')
+        hprint = net.addHost('hprint', ip='10.1.1.98/27', defaultRoute='via 10.1.1.97')
+        hphone = net.addHost('hphone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129')
 
         # Host-to-access-switch links
-        net.addLink(hq_it, hq_f1, port2=1)
-        net.addLink(hq_sales, hq_f1, port2=2)
-        net.addLink(hq_security, hq_f1, port2=3)
+        net.addLink(hit, hq_f1, port2=1)
+        net.addLink(hsales, hq_f1, port2=2)
+        net.addLink(hsec, hq_f1, port2=3)
 
-        net.addLink(hq_management, hq_f2, port2=1)
-        net.addLink(hq_hr, hq_f2, port2=2)
-        net.addLink(hq_finance, hq_f2, port2=3)
+        net.addLink(hmgmt, hq_f2, port2=1)
+        net.addLink(hhr, hq_f2, port2=2)
+        net.addLink(hfin, hq_f2, port2=3)
 
-        net.addLink(hq_inventory, hq_f3, port2=1)
-        net.addLink(hq_customer_service, hq_f3, port2=2)
-        net.addLink(hq_purchasing, hq_f3, port2=3)
+        net.addLink(hinv, hq_f3, port2=1)
+        net.addLink(hcust, hq_f3, port2=2)
+        net.addLink(hpurch, hq_f3, port2=3)
 
-        net.addLink(hq_camera, hq_f4, port2=1)
-        net.addLink(hq_printer, hq_f4, port2=2)
-        net.addLink(hq_phone, hq_f4, port2=3)
+        net.addLink(hcam, hq_f4, port2=1)
+        net.addLink(hprint, hq_f4, port2=2)
+        net.addLink(hphone, hq_f4, port2=3)
 
         # Access switches to distribution
         net.addLink(hq_f1, hq_dist, port1=10, port2=1, bw=1000)
@@ -89,7 +85,7 @@ class HQSite:
 
         # Distribution to L3 switch, then L3 switch to WAN router
         net.addLink(hq_dist, self.mls, port1=24, port2=1, bw=1000)
-        net.addLink(self.mls, self.gateway, port1=2, intfName2='hq_r-eth0', bw=1000)
+        net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0', bw=1000)
 
         # Save switches needed later for configure()
         self.hq_dist = hq_dist
@@ -99,7 +95,7 @@ class HQSite:
         self.hq_f4 = hq_f4
 
     def create_svi(self, vlan_id, gateway_cidr):
-        intf_name = f'hq_vlan{vlan_id}'
+        intf_name = f'hqvlan{vlan_id}'
 
         self.mls.cmd(
             f'ovs-vsctl --may-exist add-port {self.mls.name} {intf_name} '
@@ -156,9 +152,9 @@ class HQSite:
         self.mls.cmd('ip addr add 10.1.2.1/30 dev s5-eth2')
         self.mls.cmd('ip link set s5-eth2 up')
 
-        self.gateway.cmd('ip addr flush dev hq_r-eth0')
-        self.gateway.cmd('ip addr add 10.1.2.2/30 dev hq_r-eth0')
-        self.gateway.cmd('ip link set hq_r-eth0 up')
+        self.gateway.cmd('ip addr flush dev hqr-eth0')
+        self.gateway.cmd('ip addr add 10.1.2.2/30 dev hqr-eth0')
+        self.gateway.cmd('ip link set hqr-eth0 up')
 
         # Routes
         self.mls.cmd('ip route replace default via 10.1.2.2')
