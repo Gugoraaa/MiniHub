@@ -6,7 +6,7 @@ def create_svi(mls, vlan_id, gateway_cidr):
     intf_name = f'vlan{vlan_id}'
 
     mls.cmd(
-        f'ovs-vsctl --may-exist add-port mls {intf_name} '
+        f'ovs-vsctl --may-exist add-port {mls.name} {intf_name} '
         f'tag={vlan_id} -- set interface {intf_name} type=internal'
     )
 
