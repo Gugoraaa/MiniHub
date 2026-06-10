@@ -88,28 +88,26 @@ class HQSite:
             log_path='tmp/dhcp_hq.log'
         )
 
-        # DHCP-only test clients. Static representative hosts stay unchanged.
-        dh10 = net.addHost('dh10', ip=None)
-        dh60 = net.addHost('dh60', ip=None)
-        dh100 = net.addHost('dh100', ip=None)
+        # DHCP/DNS test client. Static representative hosts stay unchanged.
+        hdtest = net.addHost('hdtest', ip=None)
         self.dnsclients = [
             hit, hsales, hsec,
             hmgmt, hhr, hfin,
             hinv, hcust, hpurch,
             hcam, hprint, hphone,
             self.hweb,
+            hdtest,
         ]
 
         # Host-to-access-switch links
         net.addLink(hit, hf1, port2=1)
         net.addLink(hsales, hf1, port2=2)
         net.addLink(hsec, hf1, port2=3)
-        net.addLink(dh10, hf1, port2=4)
+        net.addLink(hdtest, hf1, port2=4)
 
         net.addLink(hmgmt, hf2, port2=1)
         net.addLink(hhr, hf2, port2=2)
         net.addLink(hfin, hf2, port2=3)
-        net.addLink(dh60, hf2, port2=4)
 
         net.addLink(hinv, hf3, port2=1)
         net.addLink(hcust, hf3, port2=2)
@@ -118,7 +116,6 @@ class HQSite:
         net.addLink(hcam, hf4, port2=1)
         net.addLink(hprint, hf4, port2=2)
         net.addLink(hphone, hf4, port2=3)
-        net.addLink(dh100, hf4, port2=4)
 
         # Access switches to distribution
         net.addLink(hf1, hdist, port1=10, port2=1 )
@@ -244,7 +241,6 @@ class HQSite:
         self.hf2.cmd('ovs-vsctl set port s2-eth1 tag=40')
         self.hf2.cmd('ovs-vsctl set port s2-eth2 tag=50')
         self.hf2.cmd('ovs-vsctl set port s2-eth3 tag=60')
-        self.hf2.cmd('ovs-vsctl set port s2-eth4 tag=60')
         self.hf2.cmd(f'ovs-vsctl set port s2-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Access ports - Floor 3
@@ -257,7 +253,6 @@ class HQSite:
         self.hf4.cmd('ovs-vsctl set port s4-eth1 tag=100')
         self.hf4.cmd('ovs-vsctl set port s4-eth2 tag=110')
         self.hf4.cmd('ovs-vsctl set port s4-eth3 tag=120')
-        self.hf4.cmd('ovs-vsctl set port s4-eth4 tag=100')
         self.hf4.cmd(f'ovs-vsctl set port s4-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Distribution trunks

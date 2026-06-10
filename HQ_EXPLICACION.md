@@ -1,6 +1,6 @@
 # Explicacion de HQ
 
-Este documento describe HQ en `sites/hq.py`. Los hosts representativos principales siguen usando IPs estaticas para no romper las pruebas existentes, y ademas se agrego DHCP como servicio de HQ con clientes dedicados de prueba.
+Este documento describe HQ en `sites/hq.py`. Los hosts representativos principales siguen usando IPs estaticas para no romper las pruebas existentes, y ademas se agrego DHCP como servicio de HQ con un cliente dedicado de prueba.
 
 ## Topologia
 
@@ -22,7 +22,7 @@ s5 -> hweb  HTTP 10.1.0.11
 s5 -> dhcphq DHCP 192.168.101.10
 ```
 
-Los hosts principales tienen IP estatica desde `net.addHost(...)`. Los clientes `dh10`, `dh60` y `dh100` existen solo para probar DHCP sin mover esas IPs estaticas.
+Los hosts principales tienen IP estatica desde `net.addHost(...)`. El cliente `hdtest` existe solo para probar DHCP y DNS sin mover esas IPs estaticas.
 
 ## Archivos de HQ
 
@@ -188,19 +188,15 @@ self.dhcp = DHCPServer(...)
 
 `hdns` y `hweb` viven en VLAN 10. `dhcphq` vive en VLAN 998.
 
-### Clientes DHCP de prueba
+### Cliente DHCP/DNS de prueba
 
 ```python
-dh10 = net.addHost('dh10', ip=None)
-dh60 = net.addHost('dh60', ip=None)
-dh100 = net.addHost('dh100', ip=None)
+hdtest = net.addHost('hdtest', ip=None)
 ```
 
-Estos hosts no reemplazan a `hit`, `hfin` ni `hcam`. Solo sirven para probar que DHCP funciona:
+Este host no reemplaza a `hit`. Solo sirve para probar que DHCP da una IP y que el host puede usar DNS despues de recibir conectividad.
 
-- `dh10` esta en VLAN 10.
-- `dh60` esta en VLAN 60.
-- `dh100` esta en VLAN 100.
+`hdtest` esta en VLAN 10, junto al gateway `10.1.0.1`, el DNS `10.1.0.10` y el servidor HTTP `10.1.0.11`.
 
 ### dnsclients
 
@@ -211,6 +207,7 @@ self.dnsclients = [
     hinv, hcust, hpurch,
     hcam, hprint, hphone,
     self.hweb,
+    hdtest,
 ]
 ```
 
@@ -515,9 +512,7 @@ self.gateway.cmd('ip route replace 192.168.101.0/24 via 10.1.2.1')
 pkill -f 'dnsmasq.*hq/site.conf'
 pkill -f 'dnsmasq.*tmp/dhcp_hq.conf'
 pkill -f 'dhcrelay.*192.168.101.10'
-pkill -f 'dhclient.*dh10-eth0'
-pkill -f 'dhclient.*dh60-eth0'
-pkill -f 'dhclient.*dh100-eth0'
+pkill -f 'dhclient.*hdtest-eth0'
 pkill -f 'python3 -m http.server 80'
 rm -f /tmp/dnsmasq-hq.pid /tmp/dnsmasq-hq.log
 rm -f /tmp/http-hq.pid /tmp/http-hq.log
@@ -542,16 +537,15 @@ hit ping -c 3 10.1.2.2
 hit ping -c 3 10.1.0.10
 hit nslookup web.hq.local
 hit curl http://web.hq.local
-dh10 dhclient -v dh10-eth0
-dh60 dhclient -v dh60-eth0
-dh100 dhclient -v dh100-eth0
-dh10 ip addr show dh10-eth0
-dh60 ip route
+hdtest dhclient -v hdtest-eth0
+hdtest ip addr show hdtest-eth0
+hdtest ip route
 dhcphq cat tmp/dhcp_hq.leases
-dh10 nslookup web.hq.local 10.1.0.10
+hdtest nslookup web.hq.local 10.1.0.10
+hdtest curl http://web.hq.local
 ```
 
-Si se usa `pingall`, primero conviene correr `dhclient` en `dh10`, `dh60` y `dh100`, porque esos tres hosts arrancan sin IP a proposito para poder probar DHCP.
+Si se usa `pingall`, primero conviene correr `dhclient` en `hdtest`, porque ese host arranca sin IP a proposito para poder probar DHCP.
 
 Resultado esperado para HTTP:
 
