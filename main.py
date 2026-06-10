@@ -38,6 +38,8 @@ def run():
     # Abrir consola Mininet
     CLI(net)
 
+    
+
     # Detener red al salir
     net.stop()
 

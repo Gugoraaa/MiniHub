@@ -1,5 +1,6 @@
 from router import Router
 from switchL3 import SwitchL3
+from services.dhcp_server import DHCPServer
 
 
 class Warehouse:
@@ -24,17 +25,31 @@ class Warehouse:
         self.r_wh = net.addHost('r_wh', cls=Router, ip=None)
 
         # =========================
-        # Hosts representativos
+        # Servidor DHCP Warehouse
         # =========================
-        self.ic1 = net.addHost('ic1', ip='10.4.0.2/27', defaultRoute='via 10.4.0.1')
-        self.office1 = net.addHost('office1', ip='10.4.0.34/27', defaultRoute='via 10.4.0.33')
-        self.recv1 = net.addHost('recv1', ip='10.4.0.66/27', defaultRoute='via 10.4.0.65')
-        self.ship1 = net.addHost('ship1', ip='10.4.0.98/28', defaultRoute='via 10.4.0.97')
-        self.sec1 = net.addHost('sec1', ip='10.4.0.114/28', defaultRoute='via 10.4.0.113')
-        self.cam1 = net.addHost('camF1', ip='10.4.0.130/28', defaultRoute='via 10.4.0.129')
-        self.prt1 = net.addHost('prt1', ip='10.4.0.146/29', defaultRoute='via 10.4.0.145')
-        self.phone1 = net.addHost('phone1', ip='10.4.0.154/30', defaultRoute='via 10.4.0.153')
-        self.cam2 = net.addHost('camF2', ip='10.4.0.131/28', defaultRoute='via 10.4.0.129')
+        self.dhcp = DHCPServer(
+            net=net,
+            name='dhcp_wh',
+            ip_cidr='192.168.104.10/24',
+            gateway='192.168.104.254',
+            conf_path='tmp/dhcp_warehouse.conf',
+            pid_path='tmp/dhcp_warehouse.pid',
+            lease_path='tmp/dhcp_warehouse.leases',
+            log_path='tmp/dhcp_warehouse.log'
+        )
+
+        # =========================
+        # Hosts representativos por DHCP
+        # =========================
+        self.ic1 = net.addHost('ic1', ip=None)
+        self.office1 = net.addHost('office1', ip=None)
+        self.recv1 = net.addHost('recv1', ip=None)
+        self.ship1 = net.addHost('ship1', ip=None)
+        self.sec1 = net.addHost('sec1', ip=None)
+        self.cam1 = net.addHost('camF1', ip=None)
+        self.prt1 = net.addHost('prt1', ip=None)
+        self.phone1 = net.addHost('phone1', ip=None)
+        self.cam2 = net.addHost('camF2', ip=None)
 
         # =========================
         # Enlaces a switch piso 1
@@ -65,9 +80,22 @@ class Warehouse:
         net.addLink(self.sw_dist, self.mls)       # s4-eth3 <-> s3-eth1
 
         # =========================
-        # Enlace multilayer -> router
+        # Enlace multilayer -> router WAN
         # =========================
-        net.addLink(self.mls, self.r_wh, intfName2='r_wh-eth0')  # s3-eth2 <-> r_wh-eth0
+        net.addLink(
+            self.mls,
+            self.r_wh,
+            intfName2='r_wh-eth0'
+        )  # s3-eth2 <-> r_wh-eth0
+
+        # =========================
+        # Enlace multilayer -> servidor DHCP
+        # =========================
+        net.addLink(
+            self.mls,
+            self.dhcp.host,
+            intfName2='dhcp_wh-eth0'
+        )  # s3-eth3 <-> dhcp_wh-eth0
 
     def create_svi(self, vlan_id, gateway_cidr):
         intf_name = f'vlan{vlan_id}'
@@ -156,13 +184,11 @@ class Warehouse:
         self.create_svi(120, '10.4.0.153/30')
 
         # =========================
-        # Enlace de tránsito MLS -> Router
+        # Enlace MLS -> Router WAN
         # VLAN 999:
         # s3      = 10.4.1.253/30
         # r_wh    = 10.4.1.254/30
         # =========================
-
-        # Ahora el enlace al router es s3-eth2, no s3-eth3
         self.mls.cmd('ovs-vsctl set port s3-eth2 tag=999')
 
         self.mls.cmd(
@@ -179,9 +205,57 @@ class Warehouse:
         self.r_wh.cmd('ip link set r_wh-eth0 up')
 
         # =========================
-        # Rutas
+        # Enlace MLS -> DHCP Server
+        # VLAN 998:
+        # s3       = 192.168.104.254/24
+        # dhcp_wh  = 192.168.104.10/24
+        # =========================
+        self.mls.cmd('ovs-vsctl set port s3-eth3 tag=998')
+
+        self.mls.cmd(
+            'ovs-vsctl --may-exist add-port s3 vlan998 '
+            'tag=998 -- set interface vlan998 type=internal'
+        )
+
+        self.mls.cmd('ip addr flush dev vlan998')
+        self.mls.cmd('ip addr add 192.168.104.254/24 dev vlan998')
+        self.mls.cmd('ip link set vlan998 up')
+
+        self.dhcp.host.cmd('ip addr flush dev dhcp_wh-eth0')
+        self.dhcp.host.setIP('192.168.104.10/24', intf='dhcp_wh-eth0')
+        self.dhcp.host.cmd('ip link set dhcp_wh-eth0 up')
+        self.dhcp.host.cmd('ip route replace default via 192.168.104.254')
+
+        # =========================
+        # Rutas WAN
         # =========================
         self.mls.cmd('ip route replace default via 10.4.1.254')
         self.r_wh.cmd('ip route replace 10.4.0.0/23 via 10.4.1.253')
+        self.r_wh.cmd('ip route replace 192.168.104.0/24 via 10.4.1.253')
+
+        # =========================
+        # DHCP Server con dnsmasq
+        # =========================
+        self.dhcp.start()
+
+        # =========================
+        # DHCP Relay en s3
+        # =========================
+        self.mls.cmd('killall dhcrelay 2>/dev/null || true')
+
+        self.mls.cmd(
+            'dhcrelay -4 '
+            '-i vlan70 '
+            '-i vlan40 '
+            '-i vlan150 '
+            '-i vlan160 '
+            '-i vlan30 '
+            '-i vlan100 '
+            '-i vlan110 '
+            '-i vlan120 '
+            '-i vlan998 '
+            '192.168.104.10'
+        )
 
         return self
+    
