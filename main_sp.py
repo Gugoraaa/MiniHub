@@ -80,9 +80,12 @@ def sp_svi_has_ip(net, switch_name, svi_name, expected_cidr):
     h = sp_node(net, switch_name)
     if h is None:
         return False
-    out = h.cmd(f'ip addr show {svi_name}').replace('\r', '')
     label = f'{svi_name} tiene {expected_cidr}'
-    if re.search(re.escape(expected_cidr), out):
+    # Usar grep para obtener solo la línea inet — evita problemas de encoding
+    # multi-línea que rompen el chequeo con cmd() en switches OVS
+    raw = h.cmd(f'ip -4 addr show dev {svi_name} | grep "inet "')
+    out = raw.replace('\r', '').replace('\x00', '').strip()
+    if expected_cidr in out:
         ok(label)
         return True
     fail(label, out)
