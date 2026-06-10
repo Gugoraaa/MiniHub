@@ -17,6 +17,7 @@ def buildmaster():
         autoSetMacs=True,
         autoStaticArp=False,
     )
+    hq = None
 
     try:
         hq = HQSite()
@@ -35,10 +36,16 @@ def buildmaster():
         print('  s5 ping -c 3 10.1.2.2')
         print('  hqr ping -c 3 10.1.2.1')
         print('  hit ping -c 3 10.1.2.2')
+        print('  hit ping -c 3 10.1.0.10')
+        print('  hit nslookup dns.hq.local 10.1.0.10')
+        print('  hit nslookup router.hq.local 10.1.0.10')
+        print('  hit nslookup dns.hq.local')
         print('==========================\n')
 
         CLI(net)
     finally:
+        if hq is not None:
+            hq.cleanup()
         net.stop()
 
 

@@ -1,3 +1,5 @@
+import os
+
 from router import Router
 from switchL3 import SwitchL3
 
@@ -24,6 +26,13 @@ class HQSite:
     def __init__(self):
         self.gateway = None
         self.mls = None
+        self.hdns = None
+        self.dnsclients = []
+
+    def hqpath(self, filename):
+        return os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '..', 'hq', filename)
+        )
 
     def build(self, net):
         # HQ router WAN
@@ -61,6 +70,15 @@ class HQSite:
         hprint = net.addHost('hprint', ip='10.1.1.98/27', defaultRoute='via 10.1.1.97')
         hphone = net.addHost('hphone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129')
 
+        # DNS server for HQ
+        self.hdns = net.addHost('hdns', ip=None)
+        self.dnsclients = [
+            hit, hsales, hsec,
+            hmgmt, hhr, hfin,
+            hinv, hcust, hpurch,
+            hcam, hprint, hphone,
+        ]
+
         # Host-to-access-switch links
         net.addLink(hit, hf1, port2=1)
         net.addLink(hsales, hf1, port2=2)
@@ -87,6 +105,7 @@ class HQSite:
         # Distribution to L3 switch, then L3 switch to WAN router
         net.addLink(hdist, self.mls, port1=24, port2=1, )
         net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0' )
+        net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
 
         # Save switches needed later for configure()
         self.hdist = hdist
@@ -106,6 +125,48 @@ class HQSite:
         self.mls.cmd(f'ip addr flush dev {intfname}')
         self.mls.cmd(f'ip addr add {gatewaycidr} dev {intfname}')
         self.mls.cmd(f'ip link set {intfname} up')
+
+    def configuredns(self):
+        self.mls.cmd('ovs-vsctl set port s5-eth3 tag=10')
+
+        self.hdns.cmd('ip addr flush dev hdns-eth0')
+        self.hdns.setIP('10.1.0.10/27', intf='hdns-eth0')
+        self.hdns.cmd('ip link set hdns-eth0 up')
+        self.hdns.setDefaultRoute('via 10.1.0.1')
+
+        probe = self.hdns.cmd('which dnsmasq 2>/dev/null').strip()
+        if not probe:
+            print('[WARN] dnsmasq no encontrado; DNS de HQ no fue iniciado.')
+            return
+
+        minihubdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        self.hdns.cmd('kill $(cat /tmp/dnsmasq-hq.pid) 2>/dev/null || true')
+        self.hdns.cmd('rm -f /tmp/dnsmasq-hq.pid /tmp/dnsmasq-hq.log')
+        self.hdns.cmd(
+            f'cd {minihubdir} && '
+            'dnsmasq -d '
+            '--conf-file=./hq/site.conf '
+            '--pid-file=/tmp/dnsmasq-hq.pid '
+            '--log-facility=/tmp/dnsmasq-hq.log &'
+        )
+
+        self.mountresolv()
+
+    def mountresolv(self):
+        source = self.hqpath('resolv.conf')
+
+        for host in self.dnsclients:
+            host.cmd('umount /etc/resolv.conf 2>/dev/null || true')
+            host.cmd('touch /etc/resolv.conf')
+            host.cmd(f'mount --bind {source} /etc/resolv.conf')
+
+    def cleanup(self):
+        if self.hdns:
+            self.hdns.cmd('kill $(cat /tmp/dnsmasq-hq.pid) 2>/dev/null || true')
+            self.hdns.cmd('rm -f /tmp/dnsmasq-hq.pid /tmp/dnsmasq-hq.log')
+
+        for host in self.dnsclients:
+            host.cmd('umount /etc/resolv.conf 2>/dev/null || true')
 
     def configure(self):
         allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)
@@ -163,6 +224,9 @@ class HQSite:
         self.gateway.cmd('ip addr flush dev hqr-eth0')
         self.gateway.setIP('10.1.2.2/30', intf='hqr-eth0')
         self.gateway.cmd('ip link set hqr-eth0 up')
+
+        # DNS server in VLAN 10
+        self.configuredns()
 
         # Routes
         self.mls.cmd('ip route replace default via 10.1.2.2')
