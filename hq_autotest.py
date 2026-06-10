@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 from mininet.link import TCLink
 from mininet.log import setLogLevel
@@ -55,14 +56,46 @@ def run_hq_tests(net):
             passed += 1
 
     hit = net.get('hit')
+    s1 = net.get('s1')
+    s5 = net.get('s5')
     hdtest = net.get('hdtest')
     dhcphq = net.get('dhcphq')
 
     print('\n=== HQ autotest ===')
 
-    dhcp_output = hdtest.cmd(
+    s1_tag = s1.cmd('ovs-vsctl get port s1-eth4 tag').strip()
+    test(s1_tag == '10',
+         'hdtest esta conectado como access port en VLAN 10',
+         s1_tag)
+
+    dhcp_proc = dhcphq.cmd("pgrep -af 'dnsmasq.*dhcp_hq.conf'")
+    test('dnsmasq' in dhcp_proc and 'dhcp_hq.conf' in dhcp_proc,
+         'dnsmasq DHCP esta corriendo en dhcphq',
+         dhcp_proc)
+
+    relay_proc = s5.cmd("pgrep -af 'dhcrelay.*192.168.101.10'")
+    test('dhcrelay' in relay_proc and '192.168.101.10' in relay_proc,
+         'dhcrelay esta corriendo en s5',
+         relay_proc)
+
+    dhcp_server_ping = s5.cmd('ping -c 3 -W 1 192.168.101.10')
+    test(packet_loss_ok(dhcp_server_ping),
+         's5 llega al servidor DHCP 192.168.101.10',
+         dhcp_server_ping)
+
+    hdtest.cmd(
+        'dhclient -r hdtest-eth0 2>/dev/null || true; '
         'killall dhclient 2>/dev/null || true; '
-        'timeout 25 dhclient -v hdtest-eth0 2>&1'
+        'ip addr flush dev hdtest-eth0; '
+        'ip link set hdtest-eth0 up; '
+        'rm -f tmp/dhclient-hdtest.leases tmp/dhclient-hdtest.pid'
+    )
+
+    dhcp_output = hdtest.cmd(
+        'timeout 35 dhclient -1 -v '
+        '-lf tmp/dhclient-hdtest.leases '
+        '-pf tmp/dhclient-hdtest.pid '
+        'hdtest-eth0 2>&1'
     )
     test('DHCPACK' in dhcp_output and 'bound to' in dhcp_output,
          'hdtest recibe IP por DHCP',
@@ -117,6 +150,19 @@ def run_hq_tests(net):
          'hdtest abre HTTP por dominio web.hq.local',
          http_output)
 
+    if passed != total:
+        print('\n--- Diagnostico DHCP HQ ---')
+        print('dhcphq ps:')
+        print(dhcphq.cmd("ps aux | grep '[d]nsmasq'").strip())
+        print('s5 ps:')
+        print(s5.cmd("ps aux | grep '[d]hcrelay'").strip())
+        print('dhcp_hq.log:')
+        print(dhcphq.cmd('cat tmp/dhcp_hq.log 2>/dev/null').strip())
+        print('hdtest interface:')
+        print(hdtest.cmd('ip addr show hdtest-eth0').strip())
+        print('hdtest route:')
+        print(hdtest.cmd('ip route').strip())
+
     print(f'\nResultado HQ autotest: {passed}/{total} pruebas pasaron')
     return passed == total
 
@@ -141,6 +187,7 @@ def main():
 
         net.start()
         hq.configure()
+        time.sleep(2)
 
         ok = run_hq_tests(net)
     finally:
