@@ -30,6 +30,8 @@ class DHCPServer:
         )
 
     def start(self):
+        # Matar cualquier instancia previa que tenga el puerto 67 tomado
+        self.host.cmd('killall dnsmasq 2>/dev/null || true')
         self.host.cmd(f'rm -f {self.pid_path} {self.lease_path} {self.log_path}')
 
         self.host.cmd(
