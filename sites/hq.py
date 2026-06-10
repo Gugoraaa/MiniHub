@@ -86,7 +86,6 @@ class HQSite:
             hinv, hcust, hpurch,
             hcam, hprint, hphone,
             self.hweb,
-            hdtest,
         ]
 
         # Host-to-access-switch links
