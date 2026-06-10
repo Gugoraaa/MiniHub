@@ -22,7 +22,7 @@ s5 -> hweb    servidor HTTP
 s5 -> dhcphq  servidor DHCP
 ```
 
-Los hosts de usuario ya no tienen IP estatica. Arrancan con `ip=None` y obtienen direccion por DHCP usando `dhclient`.
+Los hosts de usuario ya no tienen IP estatica. Arrancan con `ip=None` y HQ ejecuta `dhclient` automaticamente para que reciban direccion por DHCP.
 
 ## Archivos involucrados
 
@@ -107,6 +107,7 @@ self.mls = None
 self.hdns = None
 self.hweb = None
 self.dhcp = None
+self.dhcpclients = []
 self.dnsclients = []
 ```
 
@@ -117,6 +118,7 @@ Estos atributos guardan referencias a nodos importantes:
 - `hdns`: el servidor DNS.
 - `hweb`: el servidor HTTP.
 - `dhcp`: el objeto `DHCPServer` de HQ.
+- `dhcpclients`: lista de hosts de usuario que deben pedir IP por DHCP.
 - `dnsclients`: lista de hosts a los que se les monta `hq/resolv.conf`.
 
 ## Funcion `hqpath`
@@ -180,13 +182,7 @@ hsales = net.addHost('hsales', ip=None)
 hphone = net.addHost('hphone', ip=None)
 ```
 
-Estos son hosts representativos por area. Tienen `ip=None` porque ahora el objetivo es que reciban IP por DHCP.
-
-Antes tenian IP estatica; con DHCP real, se prueban con:
-
-```bash
-hit dhclient -v hit-eth0
-```
+Estos son hosts representativos por area. Tienen `ip=None` porque ahora reciben IP por DHCP. El metodo `configuredhcpclients()` se encarga de ejecutar `dhclient` por ellos al final de la configuracion.
 
 ### Servidores internos
 
@@ -212,21 +208,26 @@ Los parametros importantes de `DHCPServer` son:
 - `conf_path='tmp/dhcp_hq.conf'`: archivo de pools.
 - `pid_path`, `lease_path`, `log_path`: archivos temporales que usa `dnsmasq`.
 
-### Lista `dnsclients`
+### Listas `dhcpclients` y `dnsclients`
 
 Lineas 90 a 96:
 
 ```python
-self.dnsclients = [
+self.dhcpclients = [
     hit, hsales, hsec,
     hmgmt, hhr, hfin,
     hinv, hcust, hpurch,
     hcam, hprint, hphone,
+]
+self.dnsclients = [
+    *self.dhcpclients,
     self.hweb,
 ]
 ```
 
-Esta lista contiene los hosts que deben usar el DNS de HQ. La funcion `mountresolv()` recorre esta lista y les monta `hq/resolv.conf`.
+`dhcpclients` contiene los hosts de usuario que deben pedir IP por DHCP.
+
+`dnsclients` contiene los hosts que deben usar el DNS de HQ. Incluye todos los clientes DHCP y tambien `hweb`. La funcion `mountresolv()` recorre esta lista y les monta `hq/resolv.conf`.
 
 No se incluye `hdns` porque el mismo es el servidor DNS.
 
@@ -341,13 +342,18 @@ El servidor DNS vive en VLAN 10:
 - IP: `10.1.0.10/27`
 - Gateway: `10.1.0.1`
 
-Despues se arranca `dnsmasq`:
+Despues se arranca `dnsmasq` como daemon normal:
 
 ```python
-dnsmasq -d --conf-file=./hq/site.conf --pid-file=/tmp/dnsmasq-hq.pid &
+dnsmasq --conf-file=./hq/site.conf \
+        --pid-file=/tmp/dnsmasq-hq.pid \
+        --log-facility=/tmp/dnsmasq-hq.log \
+        --interface=hdns-eth0 \
+        --listen-address=10.1.0.10 \
+        --bind-interfaces
 ```
 
-`dnsmasq` lee `hq/site.conf`. El `&` lo deja corriendo en background.
+`dnsmasq` lee `hq/site.conf`, escucha solo en `hdns-eth0` y atiende en la IP `10.1.0.10`. El log queda en `/tmp/dnsmasq-hq.log`, lo cual ayuda a diagnosticar si DNS no arranca.
 
 ### `hq/site.conf`
 
@@ -571,6 +577,26 @@ dhcrelay -4
 
 Sin relay, el DHCP broadcast de una VLAN no llegaria al servidor porque el servidor esta en otra VLAN.
 
+### `configuredhcpclients`
+
+Despues de levantar el servidor DHCP y el relay, HQ ejecuta DHCP en cada host de usuario:
+
+```python
+for host in self.dhcpclients:
+    intf = f'{host.name}-eth0'
+    host.cmd('killall dhclient 2>/dev/null || true')
+    host.cmd(f'ip addr flush dev {intf}')
+    host.cmd(f'timeout 10 dhclient -4 -v -1 {intf} >/tmp/dhclient-{host.name}.log 2>&1')
+```
+
+Primero mata clientes DHCP viejos para evitar leases duplicados.
+
+Luego limpia la IP previa de la interfaz.
+
+Finalmente corre `dhclient -4 -v -1` con `timeout 10`, que intenta obtener una direccion IPv4 por DHCP sin dejar colgado el arranque si algo falla. La salida se guarda en `/tmp/dhclient-<host>.log`.
+
+Esto hace que al entrar a la CLI de Mininet los hosts ya tengan IP, gateway y lease DHCP.
+
 ### `tmp/dhcp_hq.conf`
 
 Este archivo define pools por VLAN.
@@ -695,6 +721,8 @@ Lineas 276 a 278:
 self.configuredns()
 self.configurehttp()
 self.configuredhcp()
+self.configuredhcpclients()
+self.mountresolv()
 ```
 
 El orden es:
@@ -702,6 +730,8 @@ El orden es:
 1. DNS: levanta `hdns` y monta resolv en clientes.
 2. HTTP: levanta `hweb`.
 3. DHCP: levanta `dhcphq` y `dhcrelay`.
+4. Clientes DHCP: cada host de usuario pide IP automaticamente.
+5. `mountresolv`: se vuelve a montar `hq/resolv.conf` despues de DHCP, porque `dhclient` puede cambiar `/etc/resolv.conf`.
 
 ### Rutas
 
@@ -782,21 +812,14 @@ Arrancar:
 sudo python3 master_wan.py
 ```
 
-Dentro de Mininet, primero pedir DHCP:
-
-```bash
-hit dhclient -v hit-eth0
-hsales dhclient -v hsales-eth0
-hfin dhclient -v hfin-eth0
-hcam dhclient -v hcam-eth0
-```
-
-Verificar lease:
+Dentro de Mininet, los hosts ya deberian tener lease DHCP. Verificar lease:
 
 ```bash
 hit ip addr show hit-eth0
 hit ip route
 hit cat /etc/resolv.conf
+dhcphq cat tmp/dhcp_hq.leases
+hdns cat /tmp/dnsmasq-hq.log
 ```
 
 Probar gateway:

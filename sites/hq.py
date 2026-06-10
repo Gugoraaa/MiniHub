@@ -31,6 +31,7 @@ class HQSite:
         self.hdns = None
         self.hweb = None
         self.dhcp = None
+        self.dhcpclients = []
         self.dnsclients = []
 
     def hqpath(self, filename):
@@ -87,11 +88,14 @@ class HQSite:
             lease_path='tmp/dhcp_hq.leases',
             log_path='tmp/dhcp_hq.log'
         )
-        self.dnsclients = [
+        self.dhcpclients = [
             hit, hsales, hsec,
             hmgmt, hhr, hfin,
             hinv, hcust, hpurch,
             hcam, hprint, hphone,
+        ]
+        self.dnsclients = [
+            *self.dhcpclients,
             self.hweb,
         ]
 
@@ -153,9 +157,13 @@ class HQSite:
         self.hdns.setDefaultRoute('via 10.1.0.1')
 
         self.hdns.cmd(
-            'dnsmasq -d '
+            'dnsmasq '
             '--conf-file=./hq/site.conf '
-            '--pid-file=/tmp/dnsmasq-hq.pid &'
+            '--pid-file=/tmp/dnsmasq-hq.pid '
+            '--log-facility=/tmp/dnsmasq-hq.log '
+            '--interface=hdns-eth0 '
+            '--listen-address=10.1.0.10 '
+            '--bind-interfaces'
         )
 
         self.mountresolv()
@@ -214,6 +222,13 @@ class HQSite:
             '-i hqdhcp '
             '192.168.101.10'
         )
+
+    def configuredhcpclients(self):
+        for host in self.dhcpclients:
+            intf = f'{host.name}-eth0'
+            host.cmd('killall dhclient 2>/dev/null || true')
+            host.cmd(f'ip addr flush dev {intf}')
+            host.cmd(f'timeout 10 dhclient -4 -v -1 {intf} >/tmp/dhclient-{host.name}.log 2>&1')
 
     def configure(self):
         allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)
@@ -276,6 +291,8 @@ class HQSite:
         self.configuredns()
         self.configurehttp()
         self.configuredhcp()
+        self.configuredhcpclients()
+        self.mountresolv()
 
         # Routes
         self.mls.cmd('ip route replace default via 10.1.2.2')
