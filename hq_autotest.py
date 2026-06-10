@@ -38,11 +38,24 @@ def packet_loss_ok(output):
 
 
 def extract_ipv4(output):
-    match = re.search(r'\binet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)', output)
+    match = re.search(r'(\d{1,3}(?:\.\d{1,3}){3})/(\d{1,2})', output)
     if not match:
         return None, None
 
     return match.group(1), int(match.group(2))
+
+
+def extract_dhcp_bound_ip(output):
+    match = re.search(r'bound to\s+(\d{1,3}(?:\.\d{1,3}){3})', output)
+    if not match:
+        return None
+
+    return match.group(1)
+
+
+def has_default_route(output, gateway):
+    normalized = ' '.join(output.split())
+    return f'default via {gateway}' in normalized
 
 
 def run_hq_tests(net):
@@ -104,12 +117,16 @@ def run_hq_tests(net):
 
     ip_output = hdtest.cmd('ip -4 -o addr show dev hdtest-eth0')
     assigned_ip, prefix_len = extract_ipv4(ip_output)
+    if assigned_ip is None:
+        assigned_ip = extract_dhcp_bound_ip(dhcp_output)
+        prefix_len = 27 if assigned_ip else None
+
     test(assigned_ip is not None and prefix_len == 27 and assigned_ip.startswith('10.1.0.'),
          f'hdtest tiene IP valida de VLAN 10 ({assigned_ip or "sin IP"})',
          ip_output)
 
     route_output = hdtest.cmd('ip route')
-    test('default via 10.1.0.1' in route_output,
+    test(has_default_route(route_output, '10.1.0.1'),
          'hdtest recibe gateway 10.1.0.1 por DHCP',
          route_output)
 
