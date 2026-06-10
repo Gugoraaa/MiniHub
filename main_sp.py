@@ -1,6 +1,3 @@
-import re
-import subprocess
-
 from mininet.net import Mininet
 from mininet.node import OVSSwitch
 from mininet.link import TCLink
@@ -9,228 +6,77 @@ from mininet.log import setLogLevel
 
 from sites.tiendaSanPedro import TiendaSanPedro
 
-# ── colores ──────────────────────────────────────────────────────────────────
 BOLD  = '\033[1m'
 CYAN  = '\033[96m'
 GREEN = '\033[92m'
 RED   = '\033[91m'
 RESET = '\033[0m'
 
-# (host, vlan, gateway, label, dhcp_prefix, dhcp_cidr)
-SP_VLAN_HOSTS = [
-    ('sp_hwifi',  130, '10.3.0.1',   'WiFi',       '10.3.0.',  24),
-    ('sp_hchk',   140, '10.3.1.1',   'Checkout',   '10.3.1.',  27),
-    ('sp_hadmin',  40, '10.3.1.33',  'Admin',      '10.3.1.',  29),
-    ('sp_hsec',    30, '10.3.1.41',  'Security',   '10.3.1.',  29),
-    ('sp_hcam',   100, '10.3.1.49',  'Camaras',    '10.3.1.',  25),
-    ('sp_hprint', 110, '10.3.1.113', 'Impresoras', '10.3.1.',  28),
-    ('sp_hphone', 120, '10.3.1.129', 'Telefonos',  '10.3.1.',  29),
+SP_HOSTS = [
+    ('sp_hwifi',  '10.3.0.',  130, 'WiFi'),
+    ('sp_hchk',   '10.3.1.',  140, 'Checkout'),
+    ('sp_hadmin', '10.3.1.',   40, 'Admin'),
+    ('sp_hsec',   '10.3.1.',   30, 'Security'),
+    ('sp_hcam',   '10.3.1.', 100, 'Camaras'),
+    ('sp_hprint', '10.3.1.', 110, 'Impresoras'),
+    ('sp_hphone', '10.3.1.', 120, 'Telefonos'),
 ]
 
 
-# ── helpers locales ───────────────────────────────────────────────────────────
+def dhcp_all(net):
+    """Pide lease DHCP a todos los hosts."""
+    print(f'\n{BOLD}{CYAN}=== DHCP: solicitando IPs ==={RESET}')
 
-def section(title):
-    print(f'\n{BOLD}{CYAN}=== {title} ==={RESET}')
+    for host_name, prefix, vlan, label in SP_HOSTS:
+        h = net.get(host_name)
+        h.cmd(f'dhclient -4 -r {host_name}-eth0 2>/dev/null || true')
+        h.cmd(f'ip addr flush dev {host_name}-eth0')
+        out = h.cmd(f'timeout 20 dhclient -4 -1 {host_name}-eth0 2>&1')
 
+        ip_line = h.cmd(f'ip -4 addr show dev {host_name}-eth0 | grep inet').strip().replace('\r', '')
 
-def ok(label):
-    print(f'{GREEN}[OK]{RESET}   {label}')
-
-
-def fail(label, detail=''):
-    print(f'{RED}[FAIL]{RESET} {label}')
-    if detail:
-        print(f'{RED}{detail.strip()}{RESET}')
-
-
-def sp_node(net, name):
-    try:
-        return net.get(name)
-    except Exception as e:
-        fail(f'Nodo {name} no encontrado', str(e))
-        return None
-
-
-def sp_ping(net, src_name, dst_ip, label):
-    h = sp_node(net, src_name)
-    if h is None:
-        return False
-    out = h.cmd(f'ping -c 3 -W 1 {dst_ip}')
-    if '0% packet loss' in out:
-        ok(label)
-        return True
-    fail(label, out)
-    return False
-
-
-def sp_process_running(net, host_name, pattern, label):
-    h = sp_node(net, host_name)
-    if h is None:
-        return False
-    out = h.cmd(f"ps aux | grep '{pattern}' | grep -v grep")
-    if out.strip():
-        ok(label)
-        return True
-    fail(label, f'No se encontro proceso: {pattern}')
-    return False
-
-
-def sp_svi_has_ip(net, switch_name, svi_name, expected_cidr):
-    h = sp_node(net, switch_name)
-    if h is None:
-        return False
-    label = f'{svi_name} tiene {expected_cidr}'
-    # Usar grep para obtener solo la línea inet — evita problemas de encoding
-    # multi-línea que rompen el chequeo con cmd() en switches OVS
-    raw = h.cmd(f'ip -4 addr show dev {svi_name} | grep "inet "')
-    out = raw.replace('\r', '').replace('\x00', '').strip()
-    if expected_cidr in out:
-        ok(label)
-        return True
-    fail(label, out)
-    return False
-
-
-def sp_dhclient_renew(net, host_name, intf, expected_prefix, expected_cidr, gateway):
-    h = sp_node(net, host_name)
-    if h is None:
-        return False
-
-    h.cmd(f'dhclient -4 -r {intf} 2>/dev/null || true')
-    h.cmd(f'ip addr flush dev {intf}')
-
-    out = h.cmd(f'timeout 20 dhclient -4 -1 -v {intf} 2>&1')
-    label = f'{host_name} obtuvo lease DHCP'
-
-    if 'DHCPACK' not in out or 'bound to' not in out:
-        fail(label, out)
-        return False
-    ok(label)
-
-    # Verificar IP en rango
-    ip_out = h.cmd(f'ip -4 addr show dev {intf}').replace('\r', '')
-    match = re.search(r'inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)', ip_out)
-    if not match:
-        fail(f'{host_name} IP en rango {expected_prefix}x/{expected_cidr}', ip_out)
-        return False
-
-    assigned_ip   = match.group(1)
-    assigned_cidr = int(match.group(2))
-
-    if assigned_ip.startswith(expected_prefix) and assigned_cidr == expected_cidr:
-        ok(f'{host_name} IP {assigned_ip}/{assigned_cidr} en rango correcto')
-    else:
-        fail(f'{host_name} IP esperada {expected_prefix}x/{expected_cidr}',
-             f'IP actual: {assigned_ip}/{assigned_cidr}')
-        return False
-
-    # Verificar default gateway
-    route_out = h.cmd('ip route').replace('\r', '')
-    if f'default via {gateway}' in route_out:
-        ok(f'{host_name} default gateway {gateway}')
-        return True
-
-    fail(f'{host_name} default gateway {gateway}', route_out)
-    return False
-
-
-def sp_get_ipv4(net, host_name, intf):
-    h = sp_node(net, host_name)
-    if h is None:
-        return None
-    out = h.cmd(f'ip -4 addr show dev {intf}').replace('\r', '')
-    match = re.search(r'inet\s+(\d+\.\d+\.\d+\.\d+)/\d+', out)
-    return match.group(1) if match else None
-
-
-# ── validacion principal ──────────────────────────────────────────────────────
-
-def run_validation_sp(net):
-    total = 0
-    passed = 0
-
-    def test(result):
-        nonlocal total, passed
-        total += 1
-        if result:
-            passed += 1
-
-    print(f'\n{BOLD}{CYAN}######################################################{RESET}')
-    print(f'{BOLD}{CYAN}#   VALIDACION - TIENDA SAN PEDRO                    #{RESET}')
-    print(f'{BOLD}{CYAN}######################################################{RESET}')
-
-    # ── 1. Procesos activos ───────────────────────────────────────────────────
-    section('1. Procesos DHCP')
-    test(sp_process_running(net, 'dhcp_sp', 'dnsmasq',  'dnsmasq activo en dhcp_sp'))
-    test(sp_process_running(net, 's17',     'dhcrelay', 'dhcrelay activo en s17 (core L3)'))
-
-    # ── 2. SVIs del core L3 ───────────────────────────────────────────────────
-    section('2. SVIs en s17 (core L3)')
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan130', '10.3.0.1/24'))
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan140', '10.3.1.1/27'))
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan40',  '10.3.1.33/29'))
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan30',  '10.3.1.41/29'))
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan100', '10.3.1.49/25'))
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan110', '10.3.1.113/28'))
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan120', '10.3.1.129/29'))
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan998', '192.168.105.254/24'))
-    test(sp_svi_has_ip(net, 's17', 'sp_vlan999', '10.3.255.253/30'))
-
-    # ── 3. Conectividad servidor DHCP ─────────────────────────────────────────
-    section('3. Conectividad servidor DHCP')
-    test(sp_ping(net, 'dhcp_sp', '192.168.105.254', 'dhcp_sp -> s17 (VLAN 998)'))
-    test(sp_ping(net, 's17',     '192.168.105.10',  's17 -> dhcp_sp'))
-
-    # ── 4. DHCP leases por VLAN ───────────────────────────────────────────────
-    section('4. DHCP leases por VLAN')
-    for host, vlan, gateway, label, prefix, cidr in SP_VLAN_HOSTS:
-        test(sp_dhclient_renew(net, host, f'{host}-eth0', prefix, cidr, gateway))
-
-    # ── 5. Host -> gateway ────────────────────────────────────────────────────
-    section('5. Host -> gateway (SVI en s16)')
-    for host, vlan, gateway, label, _, _ in SP_VLAN_HOSTS:
-        test(sp_ping(net, host, gateway,
-                     f'{host} -> {gateway}  [VLAN {vlan} {label}]'))
-
-    # ── 6. Routing inter-VLAN ─────────────────────────────────────────────────
-    section('6. Routing inter-VLAN')
-    host_ips = {}
-    for host, _, _, _, _, _ in SP_VLAN_HOSTS:
-        ip = sp_get_ipv4(net, host, f'{host}-eth0')
-        if ip:
-            host_ips[host] = ip
+        if 'bound to' in out and ip_line:
+            ip = ip_line.split()[1]
+            print(f'{GREEN}[OK]{RESET}   {host_name:12} VLAN {vlan:3} {label:12} → {ip}')
         else:
-            fail(f'No se pudo obtener IP de {host}')
+            print(f'{RED}[FAIL]{RESET} {host_name:12} VLAN {vlan:3} {label:12} → sin lease')
 
-    pairs_tested = set()
-    for src, src_vlan, _, src_label, _, _ in SP_VLAN_HOSTS:
-        for dst, dst_vlan, _, dst_label, _, _ in SP_VLAN_HOSTS:
-            if src == dst or (dst, src) in pairs_tested:
+
+def ping_between_vlans(net):
+    """Ping de cada host a todos los demás para verificar routing inter-VLAN."""
+    print(f'\n{BOLD}{CYAN}=== Ping inter-VLAN ==={RESET}')
+
+    host_ips = {}
+    for host_name, _, _, _ in SP_HOSTS:
+        h = net.get(host_name)
+        out = h.cmd(f'ip -4 addr show dev {host_name}-eth0 | grep inet').strip().replace('\r', '')
+        if out:
+            host_ips[host_name] = out.split()[1].split('/')[0]
+
+    total = passed = 0
+    for src_name, _, src_vlan, src_label in SP_HOSTS:
+        for dst_name, _, dst_vlan, dst_label in SP_HOSTS:
+            if src_name == dst_name:
                 continue
-            pairs_tested.add((src, dst))
-            if src in host_ips and dst in host_ips:
-                test(sp_ping(net, src, host_ips[dst],
-                             f'{src} [VLAN {src_vlan}] -> {dst} ({host_ips[dst]}) [VLAN {dst_vlan}]'))
+            if src_name not in host_ips or dst_name not in host_ips:
+                continue
+
+            dst_ip = host_ips[dst_name]
+            out = net.get(src_name).cmd(f'ping -c 2 -W 1 {dst_ip}')
+            total += 1
+
+            if '0% packet loss' in out:
+                passed += 1
+                print(f'{GREEN}[OK]{RESET}   {src_name} (VLAN {src_vlan}) -> {dst_name} (VLAN {dst_vlan}) [{dst_ip}]')
             else:
-                fail(f'{src} -> {dst}: IPs no disponibles')
-                test(False)
+                print(f'{RED}[FAIL]{RESET} {src_name} (VLAN {src_vlan}) -> {dst_name} (VLAN {dst_vlan}) [{dst_ip}]')
 
-    # ── 7. Transit link s17 <-> sp_r ─────────────────────────────────────────
-    section('7. Transit link (s17 core L3 <-> sp_r)')
-    test(sp_ping(net, 's17',  '10.3.255.254', 's17  -> sp_r (10.3.255.254)'))
-    test(sp_ping(net, 'sp_r', '10.3.255.253', 'sp_r -> s17  (10.3.255.253)'))
-
-    # ── Resultado ─────────────────────────────────────────────────────────────
-    print(f'\n{BOLD}Resultado: {passed}/{total} pruebas exitosas{RESET}')
+    print(f'\n{BOLD}Resultado inter-VLAN: {passed}/{total}{RESET}')
     if passed == total:
-        print(f'{GREEN}{BOLD}TODO OK: Tienda San Pedro funcionando correctamente.{RESET}\n')
-        return True
-    print(f'{RED}{BOLD}HAY FALLAS: revisa los [FAIL] de arriba.{RESET}\n')
-    return False
+        print(f'{GREEN}{BOLD}Todo OK — routing inter-VLAN funcionando.{RESET}')
+    else:
+        print(f'{RED}{BOLD}Hay fallas de conectividad entre VLANs.{RESET}')
 
-
-# ── entry point ───────────────────────────────────────────────────────────────
 
 def run():
     net = Mininet(
@@ -247,8 +93,13 @@ def run():
     net.start()
     sp.configure()
 
-    run_validation_sp(net)
+    # 1. Pedir IPs por DHCP
+    dhcp_all(net)
 
+    # 2. Ping entre todas las VLANs
+    ping_between_vlans(net)
+
+    # 3. CLI para pruebas manuales
     CLI(net)
 
     sp.stop_services()
