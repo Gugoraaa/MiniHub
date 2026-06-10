@@ -140,6 +140,49 @@ Hace `mn -c`, vacía las cadenas de iptables del host y mata procesos residuales
 
 ---
 
+## 3-bis. Cómo correrlo con Docker (igual en cualquier máquina)
+
+Si no quieres instalar Mininet, Open vSwitch ni los demás paquetes a mano, hay
+una imagen Docker que trae **todo preinstalado** y corre `topology.py` de la
+misma forma en cualquier equipo (Linux, WSL2, etc.). Solo necesitas Docker.
+
+Archivos: `Dockerfile`, `docker-entrypoint.sh`, `docker-compose.yml`, `.dockerignore`.
+
+La imagen incluye `mininet`, `openvswitch-switch`, `dnsmasq`, `isc-dhcp-relay`
+(`dhcrelay`), `isc-dhcp-client` (`dhclient`), `tcpdump` y `xterm`. El entrypoint
+arranca los demonios de Open vSwitch y hace `mn -c` antes de lanzar la topología.
+
+### Opción A — docker compose (recomendada)
+
+```bash
+docker compose run --rm minihub
+```
+
+> Se usa `run` y no `up` porque `topology.py` abre la **CLI interactiva** de
+> Mininet (`mininet>`), que necesita una terminal.
+>
+> `--rm` borra el contenedor al salir de la CLI (`exit`), para no acumular
+> contenedores muertos. La imagen se conserva, así que la siguiente corrida es
+> instantánea.
+
+### Opción B — docker a mano
+
+```bash
+docker build -t minihub-topology .
+docker run --rm -it --privileged minihub-topology
+```
+
+### Notas importantes
+
+- **`--privileged` es obligatorio:** Mininet crea network namespaces y monta
+  `/sys`; sin este flag los switches OVS no arrancan.
+- **`-it` (o `run` en compose):** la CLI `mininet>` necesita TTY interactivo.
+- **`xterm`:** para abrir terminales de hosts desde la CLI hay que reenviar X11.
+  En el host ejecuta `xhost +local:docker` y descomenta las líneas
+  `environment` / `volumes` del `docker-compose.yml`.
+
+---
+
 ## 4. Scripts incluidos
 
 | Archivo | Descripción |

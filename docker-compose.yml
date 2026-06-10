@@ -1,0 +1,21 @@
+# ============================================================
+# Levanta la topología MiniHUB con una sola orden:
+#   docker compose run --rm minihub
+# (run, no up, porque topology.py abre la CLI interactiva de Mininet)
+# ============================================================
+services:
+  minihub:
+    build: .
+    image: minihub-topology
+    # Mininet necesita crear network namespaces, montar /sys, etc.
+    privileged: true
+    # Necesario para la CLI interactiva de Mininet (mininet>)
+    stdin_open: true
+    tty: true
+    # Para que 'xterm' funcione desde la CLI hay que reenviar X11:
+    #   xhost +local:docker   (en el host)
+    # y descomentar lo siguiente:
+    # environment:
+    #   - DISPLAY=${DISPLAY}
+    # volumes:
+    #   - /tmp/.X11-unix:/tmp/.X11-unix
