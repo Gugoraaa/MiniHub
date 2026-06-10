@@ -134,20 +134,10 @@ class HQSite:
         self.hdns.cmd('ip link set hdns-eth0 up')
         self.hdns.setDefaultRoute('via 10.1.0.1')
 
-        probe = self.hdns.cmd('which dnsmasq 2>/dev/null').strip()
-        if not probe:
-            print('[WARN] dnsmasq no encontrado; DNS de HQ no fue iniciado.')
-            return
-
-        minihubdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        self.hdns.cmd('kill $(cat /tmp/dnsmasq-hq.pid) 2>/dev/null || true')
-        self.hdns.cmd('rm -f /tmp/dnsmasq-hq.pid /tmp/dnsmasq-hq.log')
         self.hdns.cmd(
-            f'cd {minihubdir} && '
             'dnsmasq -d '
             '--conf-file=./hq/site.conf '
-            '--pid-file=/tmp/dnsmasq-hq.pid '
-            '--log-facility=/tmp/dnsmasq-hq.log &'
+            '--pid-file=/tmp/dnsmasq-hq.pid &'
         )
 
         self.mountresolv()
@@ -159,14 +149,6 @@ class HQSite:
             host.cmd('umount /etc/resolv.conf 2>/dev/null || true')
             host.cmd('touch /etc/resolv.conf')
             host.cmd(f'mount --bind {source} /etc/resolv.conf')
-
-    def cleanup(self):
-        if self.hdns:
-            self.hdns.cmd('kill $(cat /tmp/dnsmasq-hq.pid) 2>/dev/null || true')
-            self.hdns.cmd('rm -f /tmp/dnsmasq-hq.pid /tmp/dnsmasq-hq.log')
-
-        for host in self.dnsclients:
-            host.cmd('umount /etc/resolv.conf 2>/dev/null || true')
 
     def configure(self):
         allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)

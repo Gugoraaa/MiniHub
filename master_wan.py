@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import os
+import subprocess
+
 from mininet.cli import CLI
 from mininet.link import TCLink
 from mininet.log import setLogLevel
@@ -9,7 +12,17 @@ from mininet.node import OVSSwitch
 from sites.hq import HQSite
 
 
+BASEDIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def runclean():
+    subprocess.run(['bash', os.path.join(BASEDIR, 'clean.sh')], check=False)
+
+
 def buildmaster():
+    os.chdir(BASEDIR)
+    runclean()
+
     net = Mininet(
         controller=None,
         switch=OVSSwitch,
@@ -17,7 +30,6 @@ def buildmaster():
         autoSetMacs=True,
         autoStaticArp=False,
     )
-    hq = None
 
     try:
         hq = HQSite()
@@ -44,8 +56,6 @@ def buildmaster():
 
         CLI(net)
     finally:
-        if hq is not None:
-            hq.cleanup()
         net.stop()
 
 
