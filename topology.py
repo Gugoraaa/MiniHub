@@ -6,7 +6,7 @@ from mininet.log import setLogLevel
 
 from sites.warehouse import Warehouse
 from sites.hq import HQSite
-
+from validate_network import run_validation
 
 def run():
     net = Mininet(
@@ -59,6 +59,8 @@ def run():
     hq.gateway.cmd('ip route replace 10.4.0.0/23 via 10.0.3.2')
     hq.gateway.cmd('ip route replace 192.168.104.0/24 via 10.0.3.2')
 
+
+    run_validation(net)
     CLI(net)
 
     wh.stop_services()

@@ -420,3 +420,10 @@ bash cleanup.sh
 | `results/comandos_validacion.md` | Comandos exactos y salidas esperadas para todas las pruebas |
 | `firewall_rules.sh` | Reglas iptables de referencia con comentarios |
 | `tests.sh` | Guía de pruebas manuales con explicación de cada comando |
+
+
+
+### 11. Correr pruebas 
+``` python
+py exec(open("validate_network.py").read()); run_validation(net)
+```
