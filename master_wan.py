@@ -54,13 +54,6 @@ def buildmaster():
         print('  hit nslookup dns.hq.local')
         print('  hit nslookup web.hq.local')
         print('  hit curl http://web.hq.local')
-        print('  hdtest dhclient -v hdtest-eth0')
-        print('  hdtest ip addr show hdtest-eth0')
-        print('  hdtest ip route')
-        print('  dhcphq cat tmp/dhcp_hq.leases')
-        print('  hdtest nslookup web.hq.local 10.1.0.10')
-        print('  hdtest curl http://web.hq.local')
-        print('  # Si usas pingall, corre primero: hdtest dhclient -v hdtest-eth0')
         print('==========================\n')
 
         CLI(net)
