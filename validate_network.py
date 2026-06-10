@@ -1,14 +1,11 @@
 # validate_network.py
-# Pruebas automáticas para topología Mininet HQ + Warehouse
-# Uso dentro del CLI de Mininet:
-#   mininet> py exec(open("validate_network.py").read()); run_validation(net)
+# Pruebas automáticas para topología Mininet HQ + Warehouse + Tienda 2
 #
-# O en main.py:
+# Uso recomendado en main.py:
 #   from validate_network import run_validation
 #   run_validation(net)
 
 import re
-import time
 
 
 GREEN = "\033[92m"
@@ -116,7 +113,6 @@ def dhcp_renew(net, host_name, intf, expected_prefix, expected_cidr, gateway):
 
     section(f"DHCP en {host_name}")
 
-    # Limpia cliente anterior y dirección anterior para evitar "Address already assigned"
     cmd(h, f"killall dhclient 2>/dev/null || true")
     cmd(h, f"dhclient -r {intf} 2>/dev/null || true")
     cmd(h, f"ip addr flush dev {intf}")
@@ -183,30 +179,75 @@ def run_validation(net):
         if result:
             passed += 1
 
-    print(f"\n{BOLD}{CYAN}############################################{RESET}")
-    print(f"{BOLD}{CYAN}# VALIDACIÓN AUTOMÁTICA HQ + WAREHOUSE      #{RESET}")
-    print(f"{BOLD}{CYAN}############################################{RESET}")
+    print(f"\n{BOLD}{CYAN}######################################################{RESET}")
+    print(f"{BOLD}{CYAN}# VALIDACIÓN AUTOMÁTICA HQ + WAREHOUSE + TIENDA 2    #{RESET}")
+    print(f"{BOLD}{CYAN}######################################################{RESET}")
 
+    # =========================================================
+    # 1. Procesos DHCP
+    # =========================================================
     section("1. Procesos DHCP")
+
     test(process_running(net, "dhcp_wh", "dnsmasq", "dnsmasq activo en dhcp_wh"))
     test(process_running(net, "s8", "dhcrelay", "dhcrelay activo en s8 / MLS Warehouse"))
 
+    test(process_running(net, "dhcp_t2", "dnsmasq", "dnsmasq activo en dhcp_t2"))
+    test(process_running(net, "s12", "dhcrelay", "dhcrelay activo en s12 / MLS Tienda 2"))
+
+    # =========================================================
+    # 2. Interfaces WAN / tránsito
+    # =========================================================
     section("2. Interfaces WAN / tránsito")
+
+    # Warehouse interno
     test(interface_has_ip(net, "r_wh", "r_wh-eth0", "10.4.1.254/30"))
+
+    # HQ <-> Warehouse
     test(interface_has_ip(net, "hqr", "hqr-eth1", "10.0.3.1/30"))
     test(interface_has_ip(net, "r_wh", "r_wh-eth1", "10.0.3.2/30"))
 
-    # DHCP de Warehouse
+    # Tienda 2 interno
+    test(interface_has_ip(net, "r_t2", "r_t2-wan", "10.3.1.250/30"))
+
+    # HQ <-> Tienda 2
+    test(interface_has_ip(net, "hqr", "hqr-eth2", "10.0.4.1/30"))
+    test(interface_has_ip(net, "r_t2", "r_t2-eth1", "10.0.4.2/30"))
+
+    # =========================================================
+    # 3. DHCP Warehouse
+    # =========================================================
     test(dhcp_renew(net, "ic1", "ic1-eth0", "10.4.0.", 27, "10.4.0.1"))
     test(dhcp_renew(net, "office1", "office1-eth0", "10.4.0.", 27, "10.4.0.33"))
 
-    section("3. Gateways Warehouse")
+    # =========================================================
+    # 4. DHCP Tienda 2
+    # =========================================================
+    test(dhcp_renew(net, "checkout", "checkout-eth0", "10.3.1.", 27, "10.3.1.1"))
+    test(dhcp_renew(net, "pc_admin", "pc_admin-eth0", "10.3.1.", 28, "10.3.1.33"))
+
+    # =========================================================
+    # 5. Gateways Warehouse
+    # =========================================================
+    section("5. Gateways Warehouse")
+
     test(ping_test(net, "ic1", "10.4.0.1", "ic1 llega a gateway VLAN 70"))
     test(ping_test(net, "office1", "10.4.0.33", "office1 llega a gateway VLAN 40"))
     test(ping_test(net, "ic1", "10.4.1.254", "ic1 llega al router Warehouse"))
 
-    section("4. Routing inter-VLAN Warehouse")
-    # Se obtiene la IP real de office1 para no hardcodear lease
+    # =========================================================
+    # 6. Gateways Tienda 2
+    # =========================================================
+    section("6. Gateways Tienda 2")
+
+    test(ping_test(net, "checkout", "10.3.1.1", "checkout llega a gateway VLAN 140"))
+    test(ping_test(net, "pc_admin", "10.3.1.33", "pc_admin llega a gateway VLAN 40"))
+    
+
+    # =========================================================
+    # 7. Routing inter-VLAN Warehouse
+    # =========================================================
+    section("7. Routing inter-VLAN Warehouse")
+
     office_ip = get_ipv4(net, "office1", "office1-eth0")
     ic1_ip = get_ipv4(net, "ic1", "ic1-eth0")
 
@@ -214,33 +255,96 @@ def run_validation(net):
         office_addr = office_ip.split("/")[0]
         test(ping_test(net, "ic1", office_addr, f"ic1 llega a office1 ({office_addr})"))
     else:
+        fail("No se pudo obtener IP de office1")
         test(False)
 
     if ic1_ip:
         ic1_addr = ic1_ip.split("/")[0]
         test(ping_test(net, "office1", ic1_addr, f"office1 llega a ic1 ({ic1_addr})"))
     else:
+        fail("No se pudo obtener IP de ic1")
         test(False)
 
-    section("5. WAN HQ <-> Warehouse")
+    # =========================================================
+    # 8. Routing inter-VLAN Tienda 2
+    # =========================================================
+    section("8. Routing inter-VLAN Tienda 2")
+
+    checkout_ip = get_ipv4(net, "checkout", "checkout-eth0")
+    pc_admin_ip = get_ipv4(net, "pc_admin", "pc_admin-eth0")
+
+    if checkout_ip:
+        checkout_addr = checkout_ip.split("/")[0]
+        test(ping_test(net, "pc_admin", checkout_addr, f"pc_admin llega a checkout ({checkout_addr})"))
+    else:
+        fail("No se pudo obtener IP de checkout")
+        test(False)
+
+    if pc_admin_ip:
+        pc_admin_addr = pc_admin_ip.split("/")[0]
+        test(ping_test(net, "checkout", pc_admin_addr, f"checkout llega a pc_admin ({pc_admin_addr})"))
+    else:
+        fail("No se pudo obtener IP de pc_admin")
+        test(False)
+
+    # =========================================================
+    # 9. WAN HQ <-> Warehouse
+    # =========================================================
+    section("9. WAN HQ <-> Warehouse")
+
     test(ping_test(net, "r_wh", "10.0.3.1", "r_wh llega a hqr por WAN"))
     test(ping_test(net, "hqr", "10.0.3.2", "hqr llega a r_wh por WAN"))
 
-    section("6. HQ local")
+    # =========================================================
+    # 10. WAN HQ <-> Tienda 2
+    # =========================================================
+    section("10. WAN HQ <-> Tienda 2")
+
+    test(ping_test(net, "r_t2", "10.0.4.1", "r_t2 llega a hqr por WAN"))
+    test(ping_test(net, "hqr", "10.0.4.2", "hqr llega a r_t2 por WAN"))
+
+    # =========================================================
+    # 11. HQ local
+    # =========================================================
+    section("11. HQ local")
+
     test(ping_test(net, "hit", "10.1.0.1", "hit llega a su gateway HQ"))
 
-    section("7. Comunicación entre sedes")
+    # =========================================================
+    # 12. Comunicación Warehouse <-> HQ
+    # =========================================================
+    section("12. Comunicación Warehouse <-> HQ")
+
     test(ping_test(net, "ic1", "10.1.0.2", "Warehouse ic1 llega a HQ hit"))
+
     if ic1_ip:
         ic1_addr = ic1_ip.split("/")[0]
         test(ping_test(net, "hit", ic1_addr, f"HQ hit llega a Warehouse ic1 ({ic1_addr})"))
     else:
+        fail("No se pudo obtener IP de ic1")
         test(False)
 
+    # =========================================================
+    # 13. Comunicación Tienda 2 <-> HQ
+    # =========================================================
+    section("13. Comunicación Tienda 2 <-> HQ")
+
+    test(ping_test(net, "checkout", "10.1.0.2", "Tienda 2 checkout llega a HQ hit"))
+
+    if checkout_ip:
+        checkout_addr = checkout_ip.split("/")[0]
+        test(ping_test(net, "hit", checkout_addr, f"HQ hit llega a Tienda 2 checkout ({checkout_addr})"))
+    else:
+        fail("No se pudo obtener IP de checkout")
+        test(False)
+
+    # =========================================================
+    # Resultado final
+    # =========================================================
     print(f"\n{BOLD}Resultado final: {passed}/{total} pruebas exitosas{RESET}")
 
     if passed == total:
-        print(f"{GREEN}{BOLD}TODO SUCCESS: La topología HQ + Warehouse está funcionando correctamente.{RESET}\n")
+        print(f"{GREEN}{BOLD}TODO SUCCESS: HQ + Warehouse + Tienda 2 están funcionando correctamente.{RESET}\n")
         return True
 
     print(f"{RED}{BOLD}HAY FALLAS: revisa las pruebas marcadas como FAIL arriba.{RESET}\n")

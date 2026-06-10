@@ -71,11 +71,13 @@ class Tienda2:
         net.addLink(self.mls, self.r, intfName2='r_t2-wan')              # s12-eth4
 
     def create_svi(self, vlan_id, gateway_cidr):
-        intf = f'vlan{vlan_id}'
+        intf = f't2_vlan{vlan_id}'
+
         self.mls.cmd(
             f'ovs-vsctl --may-exist add-port {self.mls.name} {intf} '
             f'tag={vlan_id} -- set interface {intf} type=internal'
         )
+
         self.mls.cmd(f'ip addr flush dev {intf}')
         self.mls.cmd(f'ip addr add {gateway_cidr} dev {intf}')
         self.mls.cmd(f'ip link set {intf} up')
@@ -144,17 +146,17 @@ class Tienda2:
 
         self.dhcp.start()
 
-        self.mls.cmd('killall dhcrelay 2>/dev/null || true')
+        # self.mls.cmd('killall dhcrelay 2>/dev/null || true')
         self.mls.cmd(
             'dhcrelay -4 '
-            '-i vlan130 '
-            '-i vlan140 '
-            '-i vlan40 '
-            '-i vlan30 '
-            '-i vlan100 '
-            '-i vlan110 '
-            '-i vlan120 '
-            '-i vlan998 '
+            '-i t2_vlan130 '
+            '-i t2_vlan140 '
+            '-i t2_vlan40 '
+            '-i t2_vlan30 '
+            '-i t2_vlan100 '
+            '-i t2_vlan110 '
+            '-i t2_vlan120 '
+            '-i t2_vlan998 '
             '192.168.103.10'
         )
 

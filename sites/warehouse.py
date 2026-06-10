@@ -241,7 +241,7 @@ class Warehouse:
         # =========================
         # DHCP Relay en s8
         # =========================
-        self.mls.cmd('killall dhcrelay 2>/dev/null || true')
+        # self.mls.cmd('killall dhcrelay 2>/dev/null || true')
 
         self.mls.cmd(
             'dhcrelay -4 '
