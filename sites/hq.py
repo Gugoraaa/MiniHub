@@ -79,14 +79,14 @@ class HQSite:
         net.addLink(hphone, hf4, port2=3)
 
         # Access switches to distribution
-        net.addLink(hf1, hdist, port1=10, port2=1, bw=1000)
-        net.addLink(hf2, hdist, port1=10, port2=2, bw=1000)
-        net.addLink(hf3, hdist, port1=10, port2=3, bw=1000)
-        net.addLink(hf4, hdist, port1=10, port2=4, bw=1000)
+        net.addLink(hf1, hdist, port1=10, port2=1 )
+        net.addLink(hf2, hdist, port1=10, port2=2)
+        net.addLink(hf3, hdist, port1=10, port2=3 )
+        net.addLink(hf4, hdist, port1=10, port2=4 )
 
         # Distribution to L3 switch, then L3 switch to WAN router
-        net.addLink(hdist, self.mls, port1=24, port2=1, bw=1000)
-        net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0', bw=1000)
+        net.addLink(hdist, self.mls, port1=24, port2=1, )
+        net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0' )
 
         # Save switches needed later for configure()
         self.hdist = hdist

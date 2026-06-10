@@ -10,16 +10,16 @@ class Warehouse:
         self.net = net
 
         # =========================
-        # Switches
+        # Switches Warehouse
         # =========================
-        self.sw_piso1 = net.addSwitch('s1', failMode='standalone')
-        self.sw_piso2 = net.addSwitch('s2', failMode='standalone')
+        self.sw_piso1 = net.addSwitch('s6', failMode='standalone')
+        self.sw_piso2 = net.addSwitch('s7', failMode='standalone')
 
-        # Switch de distribución
-        self.sw_dist = net.addSwitch('s4', failMode='standalone')
+        # Switch de distribución Warehouse
+        self.sw_dist = net.addSwitch('s9', failMode='standalone')
 
-        # Switch capa 3 / multilayer
-        self.mls = net.addSwitch('s3', cls=SwitchL3, failMode='standalone')
+        # Switch capa 3 / multilayer Warehouse
+        self.mls = net.addSwitch('s8', cls=SwitchL3, failMode='standalone')
 
         # Router de salida WAN / HQ
         self.r_wh = net.addHost('r_wh', cls=Router, ip=None)
@@ -54,30 +54,30 @@ class Warehouse:
         # =========================
         # Enlaces a switch piso 1
         # =========================
-        net.addLink(self.ic1, self.sw_piso1)      # s1-eth1 -> VLAN 70
-        net.addLink(self.ship1, self.sw_piso1)    # s1-eth2 -> VLAN 160
-        net.addLink(self.recv1, self.sw_piso1)    # s1-eth3 -> VLAN 150
-        net.addLink(self.sec1, self.sw_piso1)     # s1-eth4 -> VLAN 30
-        net.addLink(self.cam1, self.sw_piso1)     # s1-eth5 -> VLAN 100
+        net.addLink(self.ic1, self.sw_piso1)      # s6-eth1 -> VLAN 70
+        net.addLink(self.ship1, self.sw_piso1)    # s6-eth2 -> VLAN 160
+        net.addLink(self.recv1, self.sw_piso1)    # s6-eth3 -> VLAN 150
+        net.addLink(self.sec1, self.sw_piso1)     # s6-eth4 -> VLAN 30
+        net.addLink(self.cam1, self.sw_piso1)     # s6-eth5 -> VLAN 100
 
         # =========================
         # Enlaces a switch piso 2
         # =========================
-        net.addLink(self.office1, self.sw_piso2)  # s2-eth1 -> VLAN 40
-        net.addLink(self.prt1, self.sw_piso2)     # s2-eth2 -> VLAN 110
-        net.addLink(self.phone1, self.sw_piso2)   # s2-eth3 -> VLAN 120
-        net.addLink(self.cam2, self.sw_piso2)     # s2-eth4 -> VLAN 100
+        net.addLink(self.office1, self.sw_piso2)  # s7-eth1 -> VLAN 40
+        net.addLink(self.prt1, self.sw_piso2)     # s7-eth2 -> VLAN 110
+        net.addLink(self.phone1, self.sw_piso2)   # s7-eth3 -> VLAN 120
+        net.addLink(self.cam2, self.sw_piso2)     # s7-eth4 -> VLAN 100
 
         # =========================
         # Enlaces access -> distribución
         # =========================
-        net.addLink(self.sw_piso1, self.sw_dist)  # s1-eth6 <-> s4-eth1
-        net.addLink(self.sw_piso2, self.sw_dist)  # s2-eth5 <-> s4-eth2
+        net.addLink(self.sw_piso1, self.sw_dist)  # s6-eth6 <-> s9-eth1
+        net.addLink(self.sw_piso2, self.sw_dist)  # s7-eth5 <-> s9-eth2
 
         # =========================
         # Enlace distribución -> multilayer
         # =========================
-        net.addLink(self.sw_dist, self.mls)       # s4-eth3 <-> s3-eth1
+        net.addLink(self.sw_dist, self.mls)       # s9-eth3 <-> s8-eth1
 
         # =========================
         # Enlace multilayer -> router WAN
@@ -86,7 +86,7 @@ class Warehouse:
             self.mls,
             self.r_wh,
             intfName2='r_wh-eth0'
-        )  # s3-eth2 <-> r_wh-eth0
+        )  # s8-eth2 <-> r_wh-eth0
 
         # =========================
         # Enlace multilayer -> servidor DHCP
@@ -95,7 +95,7 @@ class Warehouse:
             self.mls,
             self.dhcp.host,
             intfName2='dhcp_wh-eth0'
-        )  # s3-eth3 <-> dhcp_wh-eth0
+        )  # s8-eth3 <-> dhcp_wh-eth0
 
     def create_svi(self, vlan_id, gateway_cidr):
         intf_name = f'vlan{vlan_id}'
@@ -113,7 +113,7 @@ class Warehouse:
         allowed_vlans = ','.join(str(vlan) for vlan in self.VLANS)
 
         # =========================
-        # Activar routing en s3
+        # Activar routing en s8
         # =========================
         self.mls.cmd('sysctl -w net.ipv4.ip_forward=1')
         self.mls.cmd('sysctl -w net.ipv4.conf.all.rp_filter=0')
@@ -124,51 +124,51 @@ class Warehouse:
         # =========================
         # Puertos access piso 1
         # =========================
-        self.sw_piso1.cmd('ovs-vsctl set port s1-eth1 tag=70')
-        self.sw_piso1.cmd('ovs-vsctl set port s1-eth2 tag=160')
-        self.sw_piso1.cmd('ovs-vsctl set port s1-eth3 tag=150')
-        self.sw_piso1.cmd('ovs-vsctl set port s1-eth4 tag=30')
-        self.sw_piso1.cmd('ovs-vsctl set port s1-eth5 tag=100')
+        self.sw_piso1.cmd('ovs-vsctl set port s6-eth1 tag=70')
+        self.sw_piso1.cmd('ovs-vsctl set port s6-eth2 tag=160')
+        self.sw_piso1.cmd('ovs-vsctl set port s6-eth3 tag=150')
+        self.sw_piso1.cmd('ovs-vsctl set port s6-eth4 tag=30')
+        self.sw_piso1.cmd('ovs-vsctl set port s6-eth5 tag=100')
 
         # =========================
         # Puertos access piso 2
         # =========================
-        self.sw_piso2.cmd('ovs-vsctl set port s2-eth1 tag=40')
-        self.sw_piso2.cmd('ovs-vsctl set port s2-eth2 tag=110')
-        self.sw_piso2.cmd('ovs-vsctl set port s2-eth3 tag=120')
-        self.sw_piso2.cmd('ovs-vsctl set port s2-eth4 tag=100')
+        self.sw_piso2.cmd('ovs-vsctl set port s7-eth1 tag=40')
+        self.sw_piso2.cmd('ovs-vsctl set port s7-eth2 tag=110')
+        self.sw_piso2.cmd('ovs-vsctl set port s7-eth3 tag=120')
+        self.sw_piso2.cmd('ovs-vsctl set port s7-eth4 tag=100')
 
         # =========================
         # Trunks access -> distribución
         # =========================
         self.sw_piso1.cmd(
-            f'ovs-vsctl set port s1-eth6 vlan_mode=trunk trunks={allowed_vlans}'
+            f'ovs-vsctl set port s6-eth6 vlan_mode=trunk trunks={allowed_vlans}'
         )
 
         self.sw_piso2.cmd(
-            f'ovs-vsctl set port s2-eth5 vlan_mode=trunk trunks={allowed_vlans}'
+            f'ovs-vsctl set port s7-eth5 vlan_mode=trunk trunks={allowed_vlans}'
         )
 
         # =========================
         # Trunks en switch de distribución
         # =========================
         self.sw_dist.cmd(
-            f'ovs-vsctl set port s4-eth1 vlan_mode=trunk trunks={allowed_vlans}'
+            f'ovs-vsctl set port s9-eth1 vlan_mode=trunk trunks={allowed_vlans}'
         )
 
         self.sw_dist.cmd(
-            f'ovs-vsctl set port s4-eth2 vlan_mode=trunk trunks={allowed_vlans}'
+            f'ovs-vsctl set port s9-eth2 vlan_mode=trunk trunks={allowed_vlans}'
         )
 
         self.sw_dist.cmd(
-            f'ovs-vsctl set port s4-eth3 vlan_mode=trunk trunks={allowed_vlans}'
+            f'ovs-vsctl set port s9-eth3 vlan_mode=trunk trunks={allowed_vlans}'
         )
 
         # =========================
         # Trunk distribución -> multilayer
         # =========================
         self.mls.cmd(
-            f'ovs-vsctl set port s3-eth1 vlan_mode=trunk trunks={allowed_vlans}'
+            f'ovs-vsctl set port s8-eth1 vlan_mode=trunk trunks={allowed_vlans}'
         )
 
         # =========================
@@ -186,14 +186,14 @@ class Warehouse:
         # =========================
         # Enlace MLS -> Router WAN
         # VLAN 999:
-        # s3      = 10.4.1.253/30
+        # s8      = 10.4.1.253/30
         # r_wh    = 10.4.1.254/30
         # =========================
-        self.mls.cmd('ovs-vsctl set port s3-eth2 tag=999')
+        self.mls.cmd('ovs-vsctl set port s8-eth2 tag=999')
 
         self.mls.cmd(
-            'ovs-vsctl --may-exist add-port s3 vlan999 '
-            'tag=999 -- set interface vlan999 type=internal'
+            f'ovs-vsctl --may-exist add-port {self.mls.name} vlan999 '
+            f'tag=999 -- set interface vlan999 type=internal'
         )
 
         self.mls.cmd('ip addr flush dev vlan999')
@@ -207,14 +207,14 @@ class Warehouse:
         # =========================
         # Enlace MLS -> DHCP Server
         # VLAN 998:
-        # s3       = 192.168.104.254/24
+        # s8       = 192.168.104.254/24
         # dhcp_wh  = 192.168.104.10/24
         # =========================
-        self.mls.cmd('ovs-vsctl set port s3-eth3 tag=998')
+        self.mls.cmd('ovs-vsctl set port s8-eth3 tag=998')
 
         self.mls.cmd(
-            'ovs-vsctl --may-exist add-port s3 vlan998 '
-            'tag=998 -- set interface vlan998 type=internal'
+            f'ovs-vsctl --may-exist add-port {self.mls.name} vlan998 '
+            f'tag=998 -- set interface vlan998 type=internal'
         )
 
         self.mls.cmd('ip addr flush dev vlan998')
@@ -227,7 +227,7 @@ class Warehouse:
         self.dhcp.host.cmd('ip route replace default via 192.168.104.254')
 
         # =========================
-        # Rutas WAN
+        # Rutas WAN internas del Warehouse
         # =========================
         self.mls.cmd('ip route replace default via 10.4.1.254')
         self.r_wh.cmd('ip route replace 10.4.0.0/23 via 10.4.1.253')
@@ -239,7 +239,7 @@ class Warehouse:
         self.dhcp.start()
 
         # =========================
-        # DHCP Relay en s3
+        # DHCP Relay en s8
         # =========================
         self.mls.cmd('killall dhcrelay 2>/dev/null || true')
 
@@ -258,4 +258,25 @@ class Warehouse:
         )
 
         return self
-    
+
+    def stop_services(self):
+        """
+        Detiene servicios del Warehouse antes de apagar Mininet.
+        """
+
+        # Detener DHCP relay en s8
+        self.mls.cmd('killall dhcrelay 2>/dev/null || true')
+
+        # Detener servidor DHCP
+        self.dhcp.stop()
+
+        # Detener clientes DHCP en hosts
+        self.ic1.cmd('killall dhclient 2>/dev/null || true')
+        self.office1.cmd('killall dhclient 2>/dev/null || true')
+        self.recv1.cmd('killall dhclient 2>/dev/null || true')
+        self.ship1.cmd('killall dhclient 2>/dev/null || true')
+        self.sec1.cmd('killall dhclient 2>/dev/null || true')
+        self.cam1.cmd('killall dhclient 2>/dev/null || true')
+        self.prt1.cmd('killall dhclient 2>/dev/null || true')
+        self.phone1.cmd('killall dhclient 2>/dev/null || true')
+        self.cam2.cmd('killall dhclient 2>/dev/null || true')
