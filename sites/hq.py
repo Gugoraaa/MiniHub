@@ -1,11 +1,13 @@
 import os
 
 from router import Router
+from services.dhcp_server import DHCPServer
 from switchL3 import SwitchL3
 
 
 class HQSite:
     VLANS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+    DHCPVLAN = 998
     WANVLAN = 999
 
     SVIGATEWAYS = {
@@ -28,6 +30,7 @@ class HQSite:
         self.mls = None
         self.hdns = None
         self.hweb = None
+        self.dhcp = None
         self.dnsclients = []
 
     def hqpath(self, filename):
@@ -52,28 +55,38 @@ class HQSite:
         self.mls = net.addSwitch('s5', cls=SwitchL3, failMode='standalone')
 
         # Floor 1 representative hosts
-        hit = net.addHost('hit', ip='10.1.0.2/27', defaultRoute='via 10.1.0.1')
-        hsales = net.addHost('hsales', ip='10.1.0.34/27', defaultRoute='via 10.1.0.33')
-        hsec = net.addHost('hsec', ip='10.1.0.66/27', defaultRoute='via 10.1.0.65')
+        hit = net.addHost('hit', ip=None)
+        hsales = net.addHost('hsales', ip=None)
+        hsec = net.addHost('hsec', ip=None)
 
         # Floor 2 representative hosts
-        hmgmt = net.addHost('hmgmt', ip='10.1.0.98/27', defaultRoute='via 10.1.0.97')
-        hhr = net.addHost('hhr', ip='10.1.0.130/27', defaultRoute='via 10.1.0.129')
-        hfin = net.addHost('hfin', ip='10.1.0.162/27', defaultRoute='via 10.1.0.161')
+        hmgmt = net.addHost('hmgmt', ip=None)
+        hhr = net.addHost('hhr', ip=None)
+        hfin = net.addHost('hfin', ip=None)
 
         # Floor 3 representative hosts
-        hinv = net.addHost('hinv', ip='10.1.0.194/27', defaultRoute='via 10.1.0.193')
-        hcust = net.addHost('hcust', ip='10.1.1.2/27', defaultRoute='via 10.1.1.1')
-        hpurch = net.addHost('hpurch', ip='10.1.1.34/27', defaultRoute='via 10.1.1.33')
+        hinv = net.addHost('hinv', ip=None)
+        hcust = net.addHost('hcust', ip=None)
+        hpurch = net.addHost('hpurch', ip=None)
 
         # Floor 4 representative hosts
-        hcam = net.addHost('hcam', ip='10.1.1.66/27', defaultRoute='via 10.1.1.65')
-        hprint = net.addHost('hprint', ip='10.1.1.98/27', defaultRoute='via 10.1.1.97')
-        hphone = net.addHost('hphone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129')
+        hcam = net.addHost('hcam', ip=None)
+        hprint = net.addHost('hprint', ip=None)
+        hphone = net.addHost('hphone', ip=None)
 
-        # DNS server for HQ
+        # Infrastructure servers for HQ
         self.hdns = net.addHost('hdns', ip=None)
         self.hweb = net.addHost('hweb', ip=None)
+        self.dhcp = DHCPServer(
+            net=net,
+            name='dhcphq',
+            ip_cidr='192.168.101.10/24',
+            gateway='192.168.101.254',
+            conf_path='tmp/dhcp_hq.conf',
+            pid_path='tmp/dhcp_hq.pid',
+            lease_path='tmp/dhcp_hq.leases',
+            log_path='tmp/dhcp_hq.log'
+        )
         self.dnsclients = [
             hit, hsales, hsec,
             hmgmt, hhr, hfin,
@@ -110,6 +123,7 @@ class HQSite:
         net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0' )
         net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
         net.addLink(self.mls, self.hweb, port1=4, intfName2='hweb-eth0')
+        net.addLink(self.mls, self.dhcp.host, port1=5, intfName2='dhcphq-eth0')
 
         # Save switches needed later for configure()
         self.hdist = hdist
@@ -173,6 +187,34 @@ class HQSite:
             '>/tmp/http-hq.log 2>&1 & echo $! > /tmp/http-hq.pid'
         )
 
+    def configuredhcp(self):
+        self.mls.cmd(f'ovs-vsctl set port s5-eth5 tag={self.DHCPVLAN}')
+        self.createsvi(self.DHCPVLAN, '192.168.101.254/24', intfname='hqdhcp')
+
+        self.dhcp.host.cmd('ip addr flush dev dhcphq-eth0')
+        self.dhcp.host.setIP('192.168.101.10/24', intf='dhcphq-eth0')
+        self.dhcp.host.cmd('ip link set dhcphq-eth0 up')
+        self.dhcp.host.cmd('ip route replace default via 192.168.101.254')
+
+        self.dhcp.start()
+        self.mls.cmd(
+            'dhcrelay -4 '
+            '-i hqvlan10 '
+            '-i hqvlan20 '
+            '-i hqvlan30 '
+            '-i hqvlan40 '
+            '-i hqvlan50 '
+            '-i hqvlan60 '
+            '-i hqvlan70 '
+            '-i hqvlan80 '
+            '-i hqvlan90 '
+            '-i hqvlan100 '
+            '-i hqvlan110 '
+            '-i hqvlan120 '
+            '-i hqdhcp '
+            '192.168.101.10'
+        )
+
     def configure(self):
         allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)
 
@@ -233,9 +275,11 @@ class HQSite:
         # DNS server in VLAN 10
         self.configuredns()
         self.configurehttp()
+        self.configuredhcp()
 
         # Routes
         self.mls.cmd('ip route replace default via 10.1.2.2')
         self.gateway.cmd('ip route replace 10.1.0.0/23 via 10.1.2.1')
+        self.gateway.cmd('ip route replace 192.168.101.0/24 via 10.1.2.1')
 
         return self
