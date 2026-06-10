@@ -88,13 +88,14 @@ def run_hq_tests(net):
         'killall dhclient 2>/dev/null || true; '
         'ip addr flush dev hdtest-eth0; '
         'ip link set hdtest-eth0 up; '
-        'rm -f tmp/dhclient-hdtest.leases tmp/dhclient-hdtest.pid'
+        'rm -f /tmp/dhclient-hdtest.leases /tmp/dhclient-hdtest.pid; '
+        'touch /tmp/dhclient-hdtest.leases'
     )
 
     dhcp_output = hdtest.cmd(
         'timeout 35 dhclient -1 -v '
-        '-lf tmp/dhclient-hdtest.leases '
-        '-pf tmp/dhclient-hdtest.pid '
+        '-lf /tmp/dhclient-hdtest.leases '
+        '-pf /tmp/dhclient-hdtest.pid '
         'hdtest-eth0 2>&1'
     )
     test('DHCPACK' in dhcp_output and 'bound to' in dhcp_output,
