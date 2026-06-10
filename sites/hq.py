@@ -4,6 +4,7 @@ from switchL3 import SwitchL3
 
 class HQSite:
     VLANS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+    WANVLAN = 999
 
     SVIGATEWAYS = {
         10: '10.1.0.1/27',
@@ -94,8 +95,8 @@ class HQSite:
         self.hf3 = hf3
         self.hf4 = hf4
 
-    def createsvi(self, vlanid, gatewaycidr):
-        intfname = f'hqvlan{vlanid}'
+    def createsvi(self, vlanid, gatewaycidr, intfname=None):
+        intfname = intfname or f'hqvlan{vlanid}'
 
         self.mls.cmd(
             f'ovs-vsctl --may-exist add-port {self.mls.name} {intfname} '
@@ -108,6 +109,13 @@ class HQSite:
 
     def configure(self):
         allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)
+
+        # Ensure s5 routes between SVIs and transit segments.
+        self.mls.cmd('sysctl -w net.ipv4.ip_forward=1')
+        self.mls.cmd('sysctl -w net.ipv4.conf.all.rp_filter=0')
+        self.mls.cmd('sysctl -w net.ipv4.conf.default.rp_filter=0')
+        self.mls.cmd('iptables -P FORWARD ACCEPT')
+        self.mls.cmd('iptables -F FORWARD')
 
         # Access ports - Floor 1
         self.hf1.cmd('ovs-vsctl set port s1-eth1 tag=10')
@@ -147,13 +155,13 @@ class HQSite:
         for vlanid, gatewaycidr in self.SVIGATEWAYS.items():
             self.createsvi(vlanid, gatewaycidr)
 
-        # Transit link L3 switch -> WAN router
-        self.mls.cmd('ip addr flush dev s5-eth2')
-        self.mls.cmd('ip addr add 10.1.2.1/30 dev s5-eth2')
-        self.mls.cmd('ip link set s5-eth2 up')
+        # Transit link L3 switch -> WAN router.
+        # s5-eth2 is an OVS access port; the IP lives on an internal SVI.
+        self.mls.cmd(f'ovs-vsctl set port s5-eth2 tag={self.WANVLAN}')
+        self.createsvi(self.WANVLAN, '10.1.2.1/30', intfname='hqwan')
 
         self.gateway.cmd('ip addr flush dev hqr-eth0')
-        self.gateway.cmd('ip addr add 10.1.2.2/30 dev hqr-eth0')
+        self.gateway.setIP('10.1.2.2/30', intf='hqr-eth0')
         self.gateway.cmd('ip link set hqr-eth0 up')
 
         # Routes
