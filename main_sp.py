@@ -159,24 +159,24 @@ def run_validation_sp(net):
     # ── 1. Procesos activos ───────────────────────────────────────────────────
     section('1. Procesos DHCP')
     test(sp_process_running(net, 'dhcp_sp', 'dnsmasq',  'dnsmasq activo en dhcp_sp'))
-    test(sp_process_running(net, 's16',     'dhcrelay', 'dhcrelay activo en s16'))
+    test(sp_process_running(net, 's17',     'dhcrelay', 'dhcrelay activo en s17 (core L3)'))
 
     # ── 2. SVIs del core L3 ───────────────────────────────────────────────────
-    section('2. SVIs en s16')
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan130', '10.3.0.1/24'))
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan140', '10.3.1.1/27'))
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan40',  '10.3.1.33/29'))
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan30',  '10.3.1.41/29'))
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan100', '10.3.1.49/25'))
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan110', '10.3.1.113/28'))
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan120', '10.3.1.129/29'))
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan998', '192.168.105.254/24'))
-    test(sp_svi_has_ip(net, 's16', 'sp_vlan999', '10.3.255.253/30'))
+    section('2. SVIs en s17 (core L3)')
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan130', '10.3.0.1/24'))
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan140', '10.3.1.1/27'))
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan40',  '10.3.1.33/29'))
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan30',  '10.3.1.41/29'))
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan100', '10.3.1.49/25'))
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan110', '10.3.1.113/28'))
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan120', '10.3.1.129/29'))
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan998', '192.168.105.254/24'))
+    test(sp_svi_has_ip(net, 's17', 'sp_vlan999', '10.3.255.253/30'))
 
     # ── 3. Conectividad servidor DHCP ─────────────────────────────────────────
     section('3. Conectividad servidor DHCP')
-    test(sp_ping(net, 'dhcp_sp', '192.168.105.254', 'dhcp_sp -> s16 (VLAN 998)'))
-    test(sp_ping(net, 's16',     '192.168.105.10',  's16 -> dhcp_sp'))
+    test(sp_ping(net, 'dhcp_sp', '192.168.105.254', 'dhcp_sp -> s17 (VLAN 998)'))
+    test(sp_ping(net, 's17',     '192.168.105.10',  's17 -> dhcp_sp'))
 
     # ── 4. DHCP leases por VLAN ───────────────────────────────────────────────
     section('4. DHCP leases por VLAN')
@@ -212,10 +212,10 @@ def run_validation_sp(net):
                 fail(f'{src} -> {dst}: IPs no disponibles')
                 test(False)
 
-    # ── 7. Transit link s16 <-> sp_r ─────────────────────────────────────────
-    section('7. Transit link (s16 <-> sp_r)')
-    test(sp_ping(net, 's16',  '10.3.255.254', 's16  -> sp_r (10.3.255.254)'))
-    test(sp_ping(net, 'sp_r', '10.3.255.253', 'sp_r -> s16  (10.3.255.253)'))
+    # ── 7. Transit link s17 <-> sp_r ─────────────────────────────────────────
+    section('7. Transit link (s17 core L3 <-> sp_r)')
+    test(sp_ping(net, 's17',  '10.3.255.254', 's17  -> sp_r (10.3.255.254)'))
+    test(sp_ping(net, 'sp_r', '10.3.255.253', 'sp_r -> s17  (10.3.255.253)'))
 
     # ── Resultado ─────────────────────────────────────────────────────────────
     print(f'\n{BOLD}Resultado: {passed}/{total} pruebas exitosas{RESET}')
