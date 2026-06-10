@@ -7,6 +7,7 @@ class TiendaSanPedro:
     DHCP_VLAN = 998
     TRANSIT_VLAN = 999
 
+    #hola
     SP_DHCP_HOSTS = (
         'sp_hwifi',
         'sp_hchk',
