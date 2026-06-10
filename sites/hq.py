@@ -1,11 +1,13 @@
 import os
 
 from router import Router
+from services.dhcp_server import DHCPServer
 from switchL3 import SwitchL3
 
 
 class HQSite:
     VLANS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+    DHCPVLAN = 998
     WANVLAN = 999
 
     SVIGATEWAYS = {
@@ -28,6 +30,7 @@ class HQSite:
         self.mls = None
         self.hdns = None
         self.hweb = None
+        self.dhcp = None
         self.dnsclients = []
 
     def hqpath(self, filename):
@@ -74,6 +77,21 @@ class HQSite:
         # Infrastructure servers for HQ
         self.hdns = net.addHost('hdns', ip=None)
         self.hweb = net.addHost('hweb', ip=None)
+        self.dhcp = DHCPServer(
+            net=net,
+            name='dhcphq',
+            ip_cidr='192.168.101.10/24',
+            gateway='192.168.101.254',
+            conf_path='tmp/dhcp_hq.conf',
+            pid_path='tmp/dhcp_hq.pid',
+            lease_path='tmp/dhcp_hq.leases',
+            log_path='tmp/dhcp_hq.log'
+        )
+
+        # DHCP-only test clients. Static representative hosts stay unchanged.
+        dh10 = net.addHost('dh10', ip=None)
+        dh60 = net.addHost('dh60', ip=None)
+        dh100 = net.addHost('dh100', ip=None)
         self.dnsclients = [
             hit, hsales, hsec,
             hmgmt, hhr, hfin,
@@ -86,10 +104,12 @@ class HQSite:
         net.addLink(hit, hf1, port2=1)
         net.addLink(hsales, hf1, port2=2)
         net.addLink(hsec, hf1, port2=3)
+        net.addLink(dh10, hf1, port2=4)
 
         net.addLink(hmgmt, hf2, port2=1)
         net.addLink(hhr, hf2, port2=2)
         net.addLink(hfin, hf2, port2=3)
+        net.addLink(dh60, hf2, port2=4)
 
         net.addLink(hinv, hf3, port2=1)
         net.addLink(hcust, hf3, port2=2)
@@ -98,6 +118,7 @@ class HQSite:
         net.addLink(hcam, hf4, port2=1)
         net.addLink(hprint, hf4, port2=2)
         net.addLink(hphone, hf4, port2=3)
+        net.addLink(dh100, hf4, port2=4)
 
         # Access switches to distribution
         net.addLink(hf1, hdist, port1=10, port2=1 )
@@ -110,6 +131,7 @@ class HQSite:
         net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0' )
         net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
         net.addLink(self.mls, self.hweb, port1=4, intfName2='hweb-eth0')
+        net.addLink(self.mls, self.dhcp.host, port1=5, intfName2='dhcphq-eth0')
 
         # Save switches needed later for configure()
         self.hdist = hdist
@@ -173,6 +195,34 @@ class HQSite:
             '>/tmp/http-hq.log 2>&1 & echo $! > /tmp/http-hq.pid'
         )
 
+    def configuredhcp(self):
+        self.mls.cmd(f'ovs-vsctl set port s5-eth5 tag={self.DHCPVLAN}')
+        self.createsvi(self.DHCPVLAN, '192.168.101.254/24', intfname='hqdhcp')
+
+        self.dhcp.host.cmd('ip addr flush dev dhcphq-eth0')
+        self.dhcp.host.setIP('192.168.101.10/24', intf='dhcphq-eth0')
+        self.dhcp.host.cmd('ip link set dhcphq-eth0 up')
+        self.dhcp.host.cmd('ip route replace default via 192.168.101.254')
+
+        self.dhcp.start()
+        self.mls.cmd(
+            'dhcrelay -4 '
+            '-i hqvlan10 '
+            '-i hqvlan20 '
+            '-i hqvlan30 '
+            '-i hqvlan40 '
+            '-i hqvlan50 '
+            '-i hqvlan60 '
+            '-i hqvlan70 '
+            '-i hqvlan80 '
+            '-i hqvlan90 '
+            '-i hqvlan100 '
+            '-i hqvlan110 '
+            '-i hqvlan120 '
+            '-i hqdhcp '
+            '192.168.101.10'
+        )
+
     def configure(self):
         allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)
 
@@ -187,12 +237,14 @@ class HQSite:
         self.hf1.cmd('ovs-vsctl set port s1-eth1 tag=10')
         self.hf1.cmd('ovs-vsctl set port s1-eth2 tag=20')
         self.hf1.cmd('ovs-vsctl set port s1-eth3 tag=30')
+        self.hf1.cmd('ovs-vsctl set port s1-eth4 tag=10')
         self.hf1.cmd(f'ovs-vsctl set port s1-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Access ports - Floor 2
         self.hf2.cmd('ovs-vsctl set port s2-eth1 tag=40')
         self.hf2.cmd('ovs-vsctl set port s2-eth2 tag=50')
         self.hf2.cmd('ovs-vsctl set port s2-eth3 tag=60')
+        self.hf2.cmd('ovs-vsctl set port s2-eth4 tag=60')
         self.hf2.cmd(f'ovs-vsctl set port s2-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Access ports - Floor 3
@@ -205,6 +257,7 @@ class HQSite:
         self.hf4.cmd('ovs-vsctl set port s4-eth1 tag=100')
         self.hf4.cmd('ovs-vsctl set port s4-eth2 tag=110')
         self.hf4.cmd('ovs-vsctl set port s4-eth3 tag=120')
+        self.hf4.cmd('ovs-vsctl set port s4-eth4 tag=100')
         self.hf4.cmd(f'ovs-vsctl set port s4-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
         # Distribution trunks
@@ -233,9 +286,11 @@ class HQSite:
         # DNS server in VLAN 10
         self.configuredns()
         self.configurehttp()
+        self.configuredhcp()
 
         # Routes
         self.mls.cmd('ip route replace default via 10.1.2.2')
         self.gateway.cmd('ip route replace 10.1.0.0/23 via 10.1.2.1')
+        self.gateway.cmd('ip route replace 192.168.101.0/24 via 10.1.2.1')
 
         return self

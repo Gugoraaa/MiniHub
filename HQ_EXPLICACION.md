@@ -1,6 +1,6 @@
 # Explicacion de HQ
 
-Este documento describe la version estable de HQ en `sites/hq.py`. Esta version usa IPs estaticas en los hosts representativos y mantiene los servicios que ya estaban funcionando: switch L3, DNS local y HTTP local.
+Este documento describe HQ en `sites/hq.py`. Los hosts representativos principales siguen usando IPs estaticas para no romper las pruebas existentes, y ademas se agrego DHCP como servicio de HQ con clientes dedicados de prueba.
 
 ## Topologia
 
@@ -19,9 +19,10 @@ El switch L3 `s5` tambien conecta servicios internos:
 ```text
 s5 -> hdns  DNS  10.1.0.10
 s5 -> hweb  HTTP 10.1.0.11
+s5 -> dhcphq DHCP 192.168.101.10
 ```
 
-No hay DHCP en HQ en esta version. Los hosts tienen IP estatica desde `net.addHost(...)`.
+Los hosts principales tienen IP estatica desde `net.addHost(...)`. Los clientes `dh10`, `dh60` y `dh100` existen solo para probar DHCP sin mover esas IPs estaticas.
 
 ## Archivos de HQ
 
@@ -29,6 +30,7 @@ No hay DHCP en HQ en esta version. Los hosts tienen IP estatica desde `net.addHo
 - `hq/site.conf`: configuracion de `dnsmasq` para DNS.
 - `hq/records.txt`: nombres locales como `web.hq.local`.
 - `hq/resolv.conf`: archivo que fuerza a los hosts a usar `10.1.0.10` como DNS.
+- `tmp/dhcp_hq.conf`: pools DHCP por VLAN para los clientes de prueba.
 - `master_wan.py`: runner que levanta HQ y abre la CLI de Mininet.
 - `clean.sh`: limpieza previa de DNS, HTTP y Mininet.
 
@@ -38,6 +40,7 @@ No hay DHCP en HQ en esta version. Los hosts tienen IP estatica desde `net.addHo
 import os
 
 from router import Router
+from services.dhcp_server import DHCPServer
 from switchL3 import SwitchL3
 ```
 
@@ -45,16 +48,21 @@ from switchL3 import SwitchL3
 
 `Router` crea el router WAN `hqr`.
 
+`DHCPServer` crea el host `dhcphq` y levanta `dnsmasq` como servidor DHCP.
+
 `SwitchL3` crea el switch multilayer `s5`, que puede rutear entre VLANs usando SVIs.
 
 ## VLANs
 
 ```python
 VLANS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+DHCPVLAN = 998
 WANVLAN = 999
 ```
 
 `VLANS` son las VLANs de usuarios y servicios internos.
+
+`DHCPVLAN = 998` es una VLAN de servicio para conectar `s5` con `dhcphq`.
 
 `WANVLAN = 999` es la VLAN del enlace de transito entre `s5` y `hqr`.
 
@@ -84,6 +92,7 @@ self.gateway = None
 self.mls = None
 self.hdns = None
 self.hweb = None
+self.dhcp = None
 self.dnsclients = []
 ```
 
@@ -91,6 +100,7 @@ self.dnsclients = []
 - `mls`: referencia al switch L3 `s5`.
 - `hdns`: referencia al servidor DNS.
 - `hweb`: referencia al servidor HTTP.
+- `dhcp`: referencia al servidor DHCP `dhcphq`.
 - `dnsclients`: lista de hosts que deben usar el DNS local de HQ.
 
 ## hqpath
@@ -167,13 +177,30 @@ Esto se repite para los 12 hosts:
 ```python
 self.hdns = net.addHost('hdns', ip=None)
 self.hweb = net.addHost('hweb', ip=None)
+self.dhcp = DHCPServer(...)
 ```
 
 `hdns` recibe IP despues: `10.1.0.10/27`.
 
 `hweb` recibe IP despues: `10.1.0.11/27`.
 
-Ambos viven en VLAN 10.
+`dhcphq` usa `192.168.101.10/24` en una VLAN de servicio.
+
+`hdns` y `hweb` viven en VLAN 10. `dhcphq` vive en VLAN 998.
+
+### Clientes DHCP de prueba
+
+```python
+dh10 = net.addHost('dh10', ip=None)
+dh60 = net.addHost('dh60', ip=None)
+dh100 = net.addHost('dh100', ip=None)
+```
+
+Estos hosts no reemplazan a `hit`, `hfin` ni `hcam`. Solo sirven para probar que DHCP funciona:
+
+- `dh10` esta en VLAN 10.
+- `dh60` esta en VLAN 60.
+- `dh100` esta en VLAN 100.
 
 ### dnsclients
 
@@ -219,6 +246,7 @@ El L3 conecta WAN, DNS y HTTP:
 net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0')
 net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
 net.addLink(self.mls, self.hweb, port1=4, intfName2='hweb-eth0')
+net.addLink(self.mls, self.dhcp.host, port1=5, intfName2='dhcphq-eth0')
 ```
 
 ## createsvi
@@ -360,6 +388,53 @@ Como `web.hq.local` apunta a `10.1.0.11`, esta prueba valida DNS y HTTP juntos:
 hit curl http://web.hq.local
 ```
 
+## DHCP
+
+### configuredhcp
+
+`dhcphq` se conecta directo a `s5-eth5`. Ese puerto queda en VLAN 998:
+
+```python
+self.mls.cmd(f'ovs-vsctl set port s5-eth5 tag={self.DHCPVLAN}')
+self.createsvi(self.DHCPVLAN, '192.168.101.254/24', intfname='hqdhcp')
+```
+
+La SVI `hqdhcp` es el gateway del servidor DHCP.
+
+```python
+self.dhcp.host.setIP('192.168.101.10/24', intf='dhcphq-eth0')
+self.dhcp.host.cmd('ip route replace default via 192.168.101.254')
+self.dhcp.start()
+```
+
+`self.dhcp.start()` arranca `dnsmasq` usando `tmp/dhcp_hq.conf`.
+
+Como el servidor DHCP esta en VLAN 998 y los clientes estan en VLANs de usuarios, `s5` corre `dhcrelay`:
+
+```python
+dhcrelay -4 -i hqvlan10 ... -i hqvlan120 -i hqdhcp 192.168.101.10
+```
+
+El relay escucha solicitudes DHCP en las SVIs de usuario y las reenvia al servidor `192.168.101.10`.
+
+### tmp/dhcp_hq.conf
+
+Este archivo define los pools de HQ. Cada pool entrega:
+
+- rango de IP;
+- gateway de su VLAN;
+- DNS `10.1.0.10`.
+
+Ejemplo VLAN 10:
+
+```conf
+dhcp-range=set:vlan10,10.1.0.12,10.1.0.30,255.255.255.224,12h
+dhcp-option=tag:vlan10,option:router,10.1.0.1
+dhcp-option=tag:vlan10,option:dns-server,10.1.0.10
+```
+
+Se usa `10.1.0.10` como DNS porque ese es `hdns`, y solo el DNS local conoce nombres como `web.hq.local`.
+
 ## configure()
 
 `configure()` corre despues de `net.start()`.
@@ -402,6 +477,7 @@ Luego levanta servicios:
 ```python
 self.configuredns()
 self.configurehttp()
+self.configuredhcp()
 ```
 
 Finalmente configura rutas:
@@ -409,6 +485,7 @@ Finalmente configura rutas:
 ```python
 self.mls.cmd('ip route replace default via 10.1.2.2')
 self.gateway.cmd('ip route replace 10.1.0.0/23 via 10.1.2.1')
+self.gateway.cmd('ip route replace 192.168.101.0/24 via 10.1.2.1')
 ```
 
 `s5` manda trafico desconocido a `hqr`.
@@ -436,9 +513,15 @@ self.gateway.cmd('ip route replace 10.1.0.0/23 via 10.1.2.1')
 
 ```bash
 pkill -f 'dnsmasq.*hq/site.conf'
+pkill -f 'dnsmasq.*tmp/dhcp_hq.conf'
+pkill -f 'dhcrelay.*192.168.101.10'
+pkill -f 'dhclient.*dh10-eth0'
+pkill -f 'dhclient.*dh60-eth0'
+pkill -f 'dhclient.*dh100-eth0'
 pkill -f 'python3 -m http.server 80'
 rm -f /tmp/dnsmasq-hq.pid /tmp/dnsmasq-hq.log
 rm -f /tmp/http-hq.pid /tmp/http-hq.log
+rm -f tmp/dhcp_hq.pid tmp/dhcp_hq.leases tmp/dhcp_hq.log
 rm -rf /tmp/hq-web
 mn -c
 ```
@@ -459,7 +542,16 @@ hit ping -c 3 10.1.2.2
 hit ping -c 3 10.1.0.10
 hit nslookup web.hq.local
 hit curl http://web.hq.local
+dh10 dhclient -v dh10-eth0
+dh60 dhclient -v dh60-eth0
+dh100 dhclient -v dh100-eth0
+dh10 ip addr show dh10-eth0
+dh60 ip route
+dhcphq cat tmp/dhcp_hq.leases
+dh10 nslookup web.hq.local 10.1.0.10
 ```
+
+Si se usa `pingall`, primero conviene correr `dhclient` en `dh10`, `dh60` y `dh100`, porque esos tres hosts arrancan sin IP a proposito para poder probar DHCP.
 
 Resultado esperado para HTTP:
 
