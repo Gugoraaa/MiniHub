@@ -12,6 +12,8 @@ services:
     # Necesario para la CLI interactiva de Mininet (mininet>)
     stdin_open: true
     tty: true
+    volumes:
+      - .:/app
     # Para que 'xterm' funcione desde la CLI hay que reenviar X11:
     #   xhost +local:docker   (en el host)
     # y descomentar lo siguiente:

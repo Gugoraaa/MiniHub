@@ -113,11 +113,15 @@ def dhcp_renew(net, host_name, intf, expected_prefix, expected_cidr, gateway):
 
     section(f"DHCP en {host_name}")
 
-    cmd(h, f"killall dhclient 2>/dev/null || true")
-    cmd(h, f"dhclient -r {intf} 2>/dev/null || true")
+    pid_path = f"tmp/dhclient-{host_name}.pid"
+    lease_path = f"tmp/dhclient-{host_name}.leases"
+
+    cmd(h, f"touch {lease_path}")
+    cmd(h, f"test ! -f {pid_path} || kill $(cat {pid_path}) 2>/dev/null || true")
+    cmd(h, f"dhclient -4 -r -pf {pid_path} -lf {lease_path} {intf} 2>/dev/null || true")
     cmd(h, f"ip addr flush dev {intf}")
 
-    out = cmd(h, f"timeout 25 dhclient -v {intf} 2>&1")
+    out = cmd(h, f"timeout 25 dhclient -4 -1 -v -pf {pid_path} -lf {lease_path} {intf} 2>&1")
 
     if "DHCPACK" in out and "bound to" in out:
         ok(f"{host_name} obtuvo lease DHCP")

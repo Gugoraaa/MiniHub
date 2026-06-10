@@ -111,6 +111,7 @@ def run():
     # OJO: tu validate_network actual probablemente solo valida HQ + Warehouse.
     # Si todavía no lo actualizamos para Tienda 2, puedes comentar esta línea.
     run_validation(net)
+    t2.start_dhcp_clients()
 
     # =========================
     # CLI Mininet

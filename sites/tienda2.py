@@ -70,6 +70,13 @@ class Tienda2:
         net.addLink(self.dhcp.host, self.mls, intfName1='dhcp_t2-eth0')  # dhcp_t2-eth0 <-> s12-eth3
         net.addLink(self.mls, self.r, intfName2='r_t2-wan')              # s12-eth4
 
+    def client_hosts(self):
+        return (
+            self.checkout, self.tprt, self.cam_ck, self.ap_sec,
+            self.alarm, self.cam_se, self.ap_sh, self.cam_sh,
+            self.pc_admin, self.phone, self.adprt, self.cam_ad
+        )
+
     def create_svi(self, vlan_id, gateway_cidr):
         intf = f't2_vlan{vlan_id}'
 
@@ -159,19 +166,37 @@ class Tienda2:
             '-i t2_vlan998 '
             '192.168.103.10'
         )
+        self.mls.cmd('sleep 1')
+
+        self.start_dhcp_clients()
 
         return self
+
+    def start_dhcp_clients(self):
+        for host in self.client_hosts():
+            intf = host.defaultIntf().name
+            pid_path = f'tmp/dhclient-{host.name}.pid'
+            lease_path = f'tmp/dhclient-{host.name}.leases'
+            log_path = f'tmp/dhclient-{host.name}.log'
+
+            host.cmd(f'touch {lease_path} {log_path}')
+            host.cmd(f'test ! -f {pid_path} || kill $(cat {pid_path}) 2>/dev/null || true')
+            host.cmd(f'dhclient -4 -r -pf {pid_path} -lf {lease_path} {intf} >/dev/null 2>&1 || true')
+            host.cmd(f'ip addr flush dev {intf}')
+            host.cmd(f'ip link set {intf} up')
+            host.cmd(
+                f'timeout 20 dhclient -4 -1 -v '
+                f'-pf {pid_path} '
+                f'-lf {lease_path} '
+                f'{intf} >{log_path} 2>&1'
+            )
 
     def stop_services(self):
         self.mls.cmd('killall dhcrelay 2>/dev/null || true')
         self.dhcp.stop()
 
-        for host in (
-            self.checkout, self.tprt, self.cam_ck, self.ap_sec,
-            self.alarm, self.cam_se, self.ap_sh, self.cam_sh,
-            self.pc_admin, self.phone, self.adprt, self.cam_ad
-        ):
-            host.cmd('killall dhclient 2>/dev/null || true')
+        for host in self.client_hosts():
+            host.cmd(f'test ! -f tmp/dhclient-{host.name}.pid || kill $(cat tmp/dhclient-{host.name}.pid) 2>/dev/null || true')
 
 
 def run():
@@ -188,9 +213,8 @@ def run():
     t2.configure()
 
     print('\n=== Tienda 2 topology loaded ===')
+    print('Clientes DHCP iniciados automaticamente en todos los hosts de Tienda 2.')
     print('Pruebas sugeridas dentro de Mininet:')
-    print('  checkout dhclient -v checkout-eth0')
-    print('  pc_admin dhclient -v pc_admin-eth0')
     print('  checkout ping -c 3 10.3.1.1')
     print('  checkout ping -c 3 pc_admin')
     print('  dhcp_t2 ping -c 3 192.168.103.254')
