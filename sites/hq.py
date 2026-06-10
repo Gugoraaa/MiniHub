@@ -27,6 +27,7 @@ class HQSite:
         self.gateway = None
         self.mls = None
         self.hdns = None
+        self.hweb = None
         self.dnsclients = []
 
     def hqpath(self, filename):
@@ -72,11 +73,13 @@ class HQSite:
 
         # DNS server for HQ
         self.hdns = net.addHost('hdns', ip=None)
+        self.hweb = net.addHost('hweb', ip=None)
         self.dnsclients = [
             hit, hsales, hsec,
             hmgmt, hhr, hfin,
             hinv, hcust, hpurch,
             hcam, hprint, hphone,
+            self.hweb,
         ]
 
         # Host-to-access-switch links
@@ -106,6 +109,7 @@ class HQSite:
         net.addLink(hdist, self.mls, port1=24, port2=1, )
         net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0' )
         net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
+        net.addLink(self.mls, self.hweb, port1=4, intfName2='hweb-eth0')
 
         # Save switches needed later for configure()
         self.hdist = hdist
@@ -149,6 +153,25 @@ class HQSite:
             host.cmd('umount /etc/resolv.conf 2>/dev/null || true')
             host.cmd('touch /etc/resolv.conf')
             host.cmd(f'mount --bind {source} /etc/resolv.conf')
+
+    def configurehttp(self):
+        self.mls.cmd('ovs-vsctl set port s5-eth4 tag=10')
+
+        self.hweb.cmd('ip addr flush dev hweb-eth0')
+        self.hweb.setIP('10.1.0.11/27', intf='hweb-eth0')
+        self.hweb.cmd('ip link set hweb-eth0 up')
+        self.hweb.setDefaultRoute('via 10.1.0.1')
+
+        self.hweb.cmd('mkdir -p /tmp/hq-web')
+        self.hweb.cmd(
+            "printf '%s\\n' '<h1>MiniHub HQ Web Server</h1>' "
+            '> /tmp/hq-web/index.html'
+        )
+        self.hweb.cmd(
+            'cd /tmp/hq-web && '
+            'python3 -m http.server 80 '
+            '>/tmp/http-hq.log 2>&1 & echo $! > /tmp/http-hq.pid'
+        )
 
     def configure(self):
         allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)
@@ -209,6 +232,7 @@ class HQSite:
 
         # DNS server in VLAN 10
         self.configuredns()
+        self.configurehttp()
 
         # Routes
         self.mls.cmd('ip route replace default via 10.1.2.2')

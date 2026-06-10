@@ -52,6 +52,8 @@ def buildmaster():
         print('  hit nslookup dns.hq.local 10.1.0.10')
         print('  hit nslookup router.hq.local 10.1.0.10')
         print('  hit nslookup dns.hq.local')
+        print('  hit nslookup web.hq.local')
+        print('  hit curl http://web.hq.local')
         print('==========================\n')
 
         CLI(net)
