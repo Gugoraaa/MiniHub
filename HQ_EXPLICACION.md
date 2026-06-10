@@ -40,15 +40,12 @@ Los hosts principales tienen IP estatica desde `net.addHost(...)`. El cliente `h
 import os
 
 from router import Router
-from services.dhcp_server import DHCPServer
 from switchL3 import SwitchL3
 ```
 
 `os` se usa para construir rutas absolutas hacia archivos de la carpeta `hq`.
 
 `Router` crea el router WAN `hqr`.
-
-`DHCPServer` crea el host `dhcphq` y levanta `dnsmasq` como servidor DHCP.
 
 `SwitchL3` crea el switch multilayer `s5`, que puede rutear entre VLANs usando SVIs.
 
@@ -177,7 +174,7 @@ Esto se repite para los 12 hosts:
 ```python
 self.hdns = net.addHost('hdns', ip=None)
 self.hweb = net.addHost('hweb', ip=None)
-self.dhcp = DHCPServer(...)
+self.dhcp = net.addHost('dhcphq', ip=None)
 ```
 
 `hdns` recibe IP despues: `10.1.0.10/27`.
@@ -243,7 +240,7 @@ El L3 conecta WAN, DNS y HTTP:
 net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0')
 net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
 net.addLink(self.mls, self.hweb, port1=4, intfName2='hweb-eth0')
-net.addLink(self.mls, self.dhcp.host, port1=5, intfName2='dhcphq-eth0')
+net.addLink(self.mls, self.dhcp, port1=5, intfName2='dhcphq-eth0')
 ```
 
 ## createsvi
@@ -399,12 +396,12 @@ self.createsvi(self.DHCPVLAN, '192.168.101.254/24', intfname='hqdhcp')
 La SVI `hqdhcp` es el gateway del servidor DHCP.
 
 ```python
-self.dhcp.host.setIP('192.168.101.10/24', intf='dhcphq-eth0')
-self.dhcp.host.cmd('ip route replace default via 192.168.101.254')
-self.dhcp.start()
+self.dhcp.setIP('192.168.101.10/24', intf='dhcphq-eth0')
+self.dhcp.cmd('ip route replace default via 192.168.101.254')
+self.dhcp.cmd('dnsmasq -C tmp/dhcp_hq.conf ... &')
 ```
 
-`self.dhcp.start()` arranca `dnsmasq` usando `tmp/dhcp_hq.conf`.
+Ese comando arranca `dnsmasq` directamente usando `tmp/dhcp_hq.conf`, igual a la idea del ejemplo `site_central.py`.
 
 Como el servidor DHCP esta en VLAN 998 y los clientes estan en VLANs de usuarios, `s5` corre `dhcrelay`:
 

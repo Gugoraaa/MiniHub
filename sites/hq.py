@@ -1,7 +1,6 @@
 import os
 
 from router import Router
-from services.dhcp_server import DHCPServer
 from switchL3 import SwitchL3
 
 
@@ -77,16 +76,7 @@ class HQSite:
         # Infrastructure servers for HQ
         self.hdns = net.addHost('hdns', ip=None)
         self.hweb = net.addHost('hweb', ip=None)
-        self.dhcp = DHCPServer(
-            net=net,
-            name='dhcphq',
-            ip_cidr='192.168.101.10/24',
-            gateway='192.168.101.254',
-            conf_path='tmp/dhcp_hq.conf',
-            pid_path='tmp/dhcp_hq.pid',
-            lease_path='tmp/dhcp_hq.leases',
-            log_path='tmp/dhcp_hq.log'
-        )
+        self.dhcp = net.addHost('dhcphq', ip=None)
 
         # DHCP/DNS test client. Static representative hosts stay unchanged.
         hdtest = net.addHost('hdtest', ip=None)
@@ -128,7 +118,7 @@ class HQSite:
         net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0' )
         net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
         net.addLink(self.mls, self.hweb, port1=4, intfName2='hweb-eth0')
-        net.addLink(self.mls, self.dhcp.host, port1=5, intfName2='dhcphq-eth0')
+        net.addLink(self.mls, self.dhcp, port1=5, intfName2='dhcphq-eth0')
 
         # Save switches needed later for configure()
         self.hdist = hdist
@@ -196,12 +186,20 @@ class HQSite:
         self.mls.cmd(f'ovs-vsctl set port s5-eth5 tag={self.DHCPVLAN}')
         self.createsvi(self.DHCPVLAN, '192.168.101.254/24', intfname='hqdhcp')
 
-        self.dhcp.host.cmd('ip addr flush dev dhcphq-eth0')
-        self.dhcp.host.setIP('192.168.101.10/24', intf='dhcphq-eth0')
-        self.dhcp.host.cmd('ip link set dhcphq-eth0 up')
-        self.dhcp.host.cmd('ip route replace default via 192.168.101.254')
+        self.dhcp.cmd('ip addr flush dev dhcphq-eth0')
+        self.dhcp.setIP('192.168.101.10/24', intf='dhcphq-eth0')
+        self.dhcp.cmd('ip link set dhcphq-eth0 up')
+        self.dhcp.cmd('ip route replace default via 192.168.101.254')
 
-        self.dhcp.start()
+        self.dhcp.cmd('rm -f tmp/dhcp_hq.pid tmp/dhcp_hq.leases tmp/dhcp_hq.log')
+        self.dhcp.cmd(
+            'dnsmasq -C tmp/dhcp_hq.conf '
+            '--pid-file=tmp/dhcp_hq.pid '
+            '--dhcp-leasefile=tmp/dhcp_hq.leases '
+            '--log-dhcp '
+            '--log-facility=tmp/dhcp_hq.log &'
+        )
+
         self.mls.cmd(
             'dhcrelay -4 '
             '-i hqvlan10 '
