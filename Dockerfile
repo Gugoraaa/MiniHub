@@ -16,6 +16,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 #   isc-dhcp-relay     -> dhcrelay (relay DHCP en los MLS)
 #   isc-dhcp-client    -> dhclient (clientes DHCP de los hosts)
 #   tcpdump            -> capturas / diagnóstico
+#   curl               -> pruebas HTTP desde hosts Mininet
 #   xterm              -> abrir terminales de hosts desde la CLI de Mininet
 # ------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -26,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         isc-dhcp-relay \
         isc-dhcp-client \
         tcpdump \
+        curl \
         xterm \
         iproute2 \
         iputils-ping \
