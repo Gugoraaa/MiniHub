@@ -48,7 +48,7 @@ class HQSite:
         self.mls = net.addSwitch('s5', cls=SwitchL3, failMode='standalone')
 
         # Floor 1 representative hosts
-        hit = net.addHost('hit', ip='10.1.0.2/27', defaultRoute='via 10.1.0.1', privateDirs=['/etc/resolv.conf'])
+        hit = net.addHost('hit', ip=None, privateDirs=['/etc/resolv.conf'])  # ip='10.1.0.2/27', defaultRoute='via 10.1.0.1'
         hsales = net.addHost('hsales', ip='10.1.0.34/27', defaultRoute='via 10.1.0.33', privateDirs=['/etc/resolv.conf'])
         hsec = net.addHost('hsec', ip='10.1.0.66/27', defaultRoute='via 10.1.0.65', privateDirs=['/etc/resolv.conf'])
 
