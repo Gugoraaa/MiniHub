@@ -7,6 +7,7 @@ from mininet.log import setLogLevel
 from sites.warehouse import Warehouse
 from sites.hq import HQSite
 from sites.tienda2 import Tienda2
+from sites.tiendaSanPedro import TiendaSanPedro
 
 from validate_network import run_validation
 
@@ -26,8 +27,10 @@ def run():
     hq = HQSite()
     wh = Warehouse(net)
     t2 = Tienda2(net)
+    sp = TiendaSanPedro()
 
     hq.build(net)
+    sp.build(net)
 
     # =========================
     # Enlace WAN Warehouse <-> HQ
@@ -56,6 +59,19 @@ def run():
     )
 
     # =========================
+    # Enlace WAN Tienda San Pedro <-> HQ
+    # Red: 10.0.5.0/30
+    # hqr  = 10.0.5.1/30
+    # sp_r = 10.0.5.2/30
+    # =========================
+    net.addLink(
+        sp.gateway,
+        hq.gateway,
+        intfName1='sp_r-eth1',
+        intfName2='hqr-eth3'
+    )
+
+    # =========================
     # Iniciar red
     # =========================
     net.start()
@@ -66,6 +82,7 @@ def run():
     hq.configure()
     wh.configure()
     t2.configure()
+    sp.configure()
 
     # =========================
     # Configurar WAN HQ <-> Warehouse
@@ -106,6 +123,25 @@ def run():
     hq.gateway.cmd('ip route replace 192.168.103.0/24 via 10.0.4.2')
 
     # =========================
+    # Configurar WAN HQ <-> Tienda San Pedro
+    # =========================
+    hq.gateway.cmd('ip addr flush dev hqr-eth3')
+    hq.gateway.setIP('10.0.5.1/30', intf='hqr-eth3')
+    hq.gateway.cmd('ip link set hqr-eth3 up')
+
+    sp.gateway.cmd('ip addr flush dev sp_r-eth1')
+    sp.gateway.setIP('10.0.5.2/30', intf='sp_r-eth1')
+    sp.gateway.cmd('ip link set sp_r-eth1 up')
+
+    # Rutas San Pedro hacia HQ
+    sp.gateway.cmd('ip route replace 10.1.0.0/23 via 10.0.5.1')
+    sp.gateway.cmd('ip route replace default via 10.0.5.1')
+
+    # Rutas HQ hacia San Pedro
+    hq.gateway.cmd('ip route replace 10.3.0.0/23 via 10.0.5.2')
+    hq.gateway.cmd('ip route replace 192.168.105.0/24 via 10.0.5.2')
+
+    # =========================
     # Pruebas automáticas
     # =========================
     # OJO: tu validate_network actual probablemente solo valida HQ + Warehouse.
@@ -123,6 +159,7 @@ def run():
     # =========================
     wh.stop_services()
     t2.stop_services()
+    sp.stop_services()
 
     net.stop()
 
