@@ -369,18 +369,18 @@ def run_validation(net):
     # =========================================================
     section("11. HQ local")
 
-    test(ping_test(net, "hit", "10.1.0.1", "hit llega a su gateway HQ"))
+    test(ping_test(net, "hsales", "10.1.0.33", "hsales llega a su gateway HQ"))
 
     # =========================================================
     # 12. Comunicación Warehouse <-> HQ
     # =========================================================
     section("12. Comunicación Warehouse <-> HQ")
 
-    test(ping_test(net, "ic1", "10.1.0.2", "Warehouse ic1 llega a HQ hit"))
+    test(ping_test(net, "ic1", "10.1.0.34", "Warehouse ic1 llega a HQ hsales"))
 
     if ic1_ip:
         ic1_addr = ic1_ip.split("/")[0]
-        test(ping_test(net, "hit", ic1_addr, f"HQ hit llega a Warehouse ic1 ({ic1_addr})"))
+        test(ping_test(net, "hsales", ic1_addr, f"HQ hsales llega a Warehouse ic1 ({ic1_addr})"))
     else:
         fail("No se pudo obtener IP de ic1")
         test(False)
@@ -390,11 +390,11 @@ def run_validation(net):
     # =========================================================
     section("13. Comunicación Tienda 2 <-> HQ")
 
-    test(ping_test(net, "checkout", "10.1.0.2", "Tienda 2 checkout llega a HQ hit"))
+    test(ping_test(net, "checkout", "10.1.0.34", "Tienda 2 checkout llega a HQ hsales"))
 
     if checkout_ip:
         checkout_addr = checkout_ip.split("/")[0]
-        test(ping_test(net, "hit", checkout_addr, f"HQ hit llega a Tienda 2 checkout ({checkout_addr})"))
+        test(ping_test(net, "hsales", checkout_addr, f"HQ hsales llega a Tienda 2 checkout ({checkout_addr})"))
     else:
         fail("No se pudo obtener IP de checkout")
         test(False)
