@@ -221,7 +221,7 @@ def run_validation(net):
     test(interface_has_ip(net, "r_t2", "r_t2-eth1", "10.0.4.2/30"))
 
     # San Pedro interno
-    test(interface_has_ip(net, "sp_r", "sp_r-eth0", "10.3.255.254/30"))
+    test(interface_has_ip(net, "sp_r", "sp_r-eth0", "10.2.255.254/30"))
 
     # HQ <-> San Pedro
     test(interface_has_ip(net, "hqr",  "hqr-eth3",  "10.0.5.1/30"))
@@ -242,8 +242,8 @@ def run_validation(net):
     # =========================================================
     # 4b. DHCP Tienda San Pedro
     # =========================================================
-    test(dhcp_renew(net, "sp_hchk",  "sp_hchk-eth0",  "10.3.1.", 27, "10.3.1.1"))
-    test(dhcp_renew(net, "sp_hwifi", "sp_hwifi-eth0", "10.3.0.", 24, "10.3.0.1"))
+    test(dhcp_renew(net, "sp_hchk",  "sp_hchk-eth0",  "10.2.1.", 27, "10.2.1.1"))
+    test(dhcp_renew(net, "sp_hwifi", "sp_hwifi-eth0", "10.2.0.", 24, "10.2.0.1"))
 
     # =========================================================
     # 5. Gateways Warehouse
@@ -312,9 +312,9 @@ def run_validation(net):
     # =========================================================
     section("7b. Gateways Tienda San Pedro")
 
-    test(ping_test(net, "sp_hchk",  "10.3.1.1",   "sp_hchk  llega a gateway VLAN 140"))
-    test(ping_test(net, "sp_hwifi", "10.3.0.1",   "sp_hwifi llega a gateway VLAN 130"))
-    test(ping_test(net, "sp_hchk",  "10.3.255.253", "sp_hchk llega al core L3 San Pedro"))
+    test(ping_test(net, "sp_hchk",  "10.2.1.1",     "sp_hchk  llega a gateway VLAN 140"))
+    test(ping_test(net, "sp_hwifi", "10.2.0.1",     "sp_hwifi llega a gateway VLAN 130"))
+    test(ping_test(net, "sp_hchk",  "10.2.255.253", "sp_hchk llega al core L3 San Pedro"))
 
     # =========================================================
     # 8b. Routing inter-VLAN Tienda San Pedro

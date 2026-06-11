@@ -133,12 +133,14 @@ def run():
     sp.gateway.setIP('10.0.5.2/30', intf='sp_r-eth1')
     sp.gateway.cmd('ip link set sp_r-eth1 up')
 
-    # Rutas San Pedro hacia HQ
+    # Rutas San Pedro hacia HQ y resto de la red
     sp.gateway.cmd('ip route replace 10.1.0.0/23 via 10.0.5.1')
+    sp.gateway.cmd('ip route replace 10.3.0.0/23 via 10.0.5.1')
+    sp.gateway.cmd('ip route replace 10.4.0.0/23 via 10.0.5.1')
     sp.gateway.cmd('ip route replace default via 10.0.5.1')
 
     # Rutas HQ hacia San Pedro
-    hq.gateway.cmd('ip route replace 10.3.0.0/23 via 10.0.5.2')
+    hq.gateway.cmd('ip route replace 10.2.0.0/23 via 10.0.5.2')
     hq.gateway.cmd('ip route replace 192.168.105.0/24 via 10.0.5.2')
 
     # =========================

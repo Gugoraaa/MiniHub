@@ -137,13 +137,13 @@ class TiendaSanPedro:
         self.s17.cmd('ovs-vsctl set port s17-eth4  tag=%d' % self.DHCP_VLAN)
 
         # --- Gateways / SVIs en el core L3 (s17) ---
-        self.create_svi(130, '10.3.0.1/24')     # WiFi Invitados/Clientes
-        self.create_svi(140, '10.3.1.1/27')     # Cajas / Checkout
-        self.create_svi(40,  '10.3.1.33/29')    # Oficina Administrativa
-        self.create_svi(30,  '10.3.1.41/29')    # Security
-        self.create_svi(100, '10.3.1.49/25')    # Cámaras
-        self.create_svi(110, '10.3.1.113/28')   # Impresoras
-        self.create_svi(120, '10.3.1.129/29')   # Teléfonos
+        self.create_svi(130, '10.2.0.1/24')     # WiFi Invitados/Clientes
+        self.create_svi(140, '10.2.1.1/27')     # Cajas / Checkout
+        self.create_svi(40,  '10.2.1.33/29')    # Oficina Administrativa
+        self.create_svi(30,  '10.2.1.41/29')    # Security
+        self.create_svi(100, '10.2.1.49/25')    # Cámaras
+        self.create_svi(110, '10.2.1.113/28')   # Impresoras
+        self.create_svi(120, '10.2.1.129/29')   # Teléfonos
 
         # --- Enlace core ↔ servidor DHCP (VLAN 998) ---
         self.create_svi(self.DHCP_VLAN, '192.168.105.254/24')
@@ -155,16 +155,16 @@ class TiendaSanPedro:
 
         # --- Transit link: core s17-eth24 ↔ router sp_r-eth0 via VLAN 999 ---
         self.s17.cmd('ovs-vsctl set port s17-eth24 tag=%d' % self.TRANSIT_VLAN)
-        self.create_svi(self.TRANSIT_VLAN, '10.3.255.253/30')
+        self.create_svi(self.TRANSIT_VLAN, '10.2.255.253/30')
 
         self.gateway.cmd('ip addr flush dev sp_r-eth0')
-        self.gateway.cmd('ip addr add 10.3.255.254/30 dev sp_r-eth0')
+        self.gateway.cmd('ip addr add 10.2.255.254/30 dev sp_r-eth0')
         self.gateway.cmd('ip link set sp_r-eth0 up')
 
         # --- Routing ---
-        self.s17.cmd('ip route replace default via 10.3.255.254')
-        self.gateway.cmd('ip route replace 10.3.0.0/23 via 10.3.255.253')
-        self.gateway.cmd('ip route replace 192.168.105.0/24 via 10.3.255.253')
+        self.s17.cmd('ip route replace default via 10.2.255.254')
+        self.gateway.cmd('ip route replace 10.2.0.0/23 via 10.2.255.253')
+        self.gateway.cmd('ip route replace 192.168.105.0/24 via 10.2.255.253')
 
         # --- DHCP server + relay ---
         self.dhcp.start()
