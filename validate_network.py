@@ -404,12 +404,12 @@ def run_validation(net):
     # =========================================================
     section("13b. Comunicación Tienda San Pedro <-> HQ")
 
-    test(ping_test(net, "sp_hchk", "10.1.0.2", "San Pedro sp_hchk llega a HQ hit"))
+    test(ping_test(net, "sp_hchk", "10.1.0.34", "San Pedro sp_hchk llega a HQ hsales"))
 
     if sp_hchk_ip:
         sp_hchk_addr = sp_hchk_ip.split("/")[0]
-        test(ping_test(net, "hit", sp_hchk_addr,
-                       f"HQ hit llega a San Pedro sp_hchk ({sp_hchk_addr})"))
+        test(ping_test(net, "hsales", sp_hchk_addr,
+                       f"HQ hsales llega a San Pedro sp_hchk ({sp_hchk_addr})"))
     else:
         fail("No se pudo obtener IP de sp_hchk")
         test(False)
