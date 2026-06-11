@@ -29,9 +29,12 @@ def dhcp_all(net):
 
     for host_name, prefix, vlan, label in SP_HOSTS:
         h = net.get(host_name)
-        h.cmd(f'dhclient -4 -r {host_name}-eth0 2>/dev/null || true')
+        pid_path   = f'tmp/dhclient-{host_name}.pid'
+        lease_path = f'tmp/dhclient-{host_name}.leases'
+        h.cmd(f'touch {lease_path}')
+        h.cmd(f'dhclient -4 -r -pf {pid_path} -lf {lease_path} {host_name}-eth0 2>/dev/null || true')
         h.cmd(f'ip addr flush dev {host_name}-eth0')
-        out = h.cmd(f'timeout 20 dhclient -4 -1 {host_name}-eth0 2>&1')
+        out = h.cmd(f'timeout 20 dhclient -4 -1 -v -pf {pid_path} -lf {lease_path} {host_name}-eth0 2>&1')
 
         ip_line = h.cmd(f'ip -4 addr show dev {host_name}-eth0 | grep inet').strip().replace('\r', '')
 
