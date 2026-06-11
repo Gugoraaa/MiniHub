@@ -1,5 +1,7 @@
-10.1.0.10 dns.hq.local dns.local
-10.1.0.11 web.hq.local www.hq.local
+10.1.1.162 dns.hq.local dns.local
+10.1.1.163 web.hq.local www.hq.local
+10.1.1.164 dhcp.hq.local dhcphq.hq.local
+10.1.1.161 gateway.services.hq.local
 10.1.0.1 gateway.it.hq.local
 10.1.0.33 gateway.sales.hq.local
 10.1.0.161 gateway.finance.hq.local

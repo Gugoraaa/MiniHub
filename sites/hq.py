@@ -4,6 +4,7 @@ from switchL3 import SwitchL3
 
 class HQSite:
     VLANS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+    SERVERVLAN = 200
     WANVLAN = 999
 
     SVIGATEWAYS = {
@@ -19,6 +20,7 @@ class HQSite:
         100: '10.1.1.65/27',
         110: '10.1.1.97/27',
         120: '10.1.1.129/27',
+        200: '10.1.1.161/27',
     }
 
     def __init__(self):
@@ -26,6 +28,7 @@ class HQSite:
         self.mls = None
         self.hdns = None
         self.hweb = None
+        self.hdhcp = None
         self.dnsclients = []
 
     def build(self, net):
@@ -65,8 +68,9 @@ class HQSite:
         hphone = net.addHost('hphone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129', privateDirs=['/etc/resolv.conf'])
 
         # Infrastructure servers for HQ
-        self.hdns = net.addHost('hdns', ip='10.1.0.10/27', defaultRoute='via 10.1.0.1')
-        self.hweb = net.addHost('hweb', ip='10.1.0.11/27', defaultRoute='via 10.1.0.1', privateDirs=['/etc/resolv.conf'])
+        self.hdns = net.addHost('hdns', ip='10.1.1.162/27', defaultRoute='via 10.1.1.161')
+        self.hweb = net.addHost('hweb', ip='10.1.1.163/27', defaultRoute='via 10.1.1.161', privateDirs=['/etc/resolv.conf'])
+        self.hdhcp = net.addHost('dhcphq', ip='10.1.1.164/27', defaultRoute='via 10.1.1.161')
 
         self.dnsclients = [
             hit, hsales, hsec,
@@ -104,6 +108,7 @@ class HQSite:
         net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0' )
         net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
         net.addLink(self.mls, self.hweb, port1=4, intfName2='hweb-eth0')
+        net.addLink(self.mls, self.hdhcp, port1=5, intfName2='dhcphq-eth0')
 
         # Save switches needed later for configure()
         self.hdist = hdist
@@ -125,10 +130,6 @@ class HQSite:
         self.mls.cmd(f'ip link set {intfname} up')
 
     def configuredns(self):
-        self.mls.cmd('ovs-vsctl set port s5-eth3 tag=10')
-
-        self.hdns.cmd('ip link set hdns-eth0 up')
-
         self.hdns.cmd(
             'dnsmasq -d '
             '--conf-file=./hq/site.conf '
@@ -139,13 +140,9 @@ class HQSite:
 
     def configureclientdns(self):
         for host in self.dnsclients:
-            host.cmd('echo "nameserver 10.1.0.10" > /etc/resolv.conf')
+            host.cmd('echo "nameserver 10.1.1.162" > /etc/resolv.conf')
 
     def configurehttp(self):
-        self.mls.cmd('ovs-vsctl set port s5-eth4 tag=10')
-
-        self.hweb.cmd('ip link set hweb-eth0 up')
-
         self.hweb.cmd('mkdir -p /tmp/hq-web')
         self.hweb.cmd(
             "printf '%s\\n' '<h1>MiniHub HQ Web Server</h1>' "
@@ -155,6 +152,27 @@ class HQSite:
             'cd /tmp/hq-web && '
             'python3 -m http.server 80 '
             '>/tmp/http-hq.log 2>&1 & echo $! > /tmp/http-hq.pid'
+        )
+
+    def configuredhcp(self):
+        self.hdhcp.cmd('dnsmasq -C tmp/dhcp_hq.conf &')
+
+        self.mls.cmd(
+            'dhcrelay -4 '
+            '-iu hqvlan200 '
+            '-id hqvlan10 '
+            '-id hqvlan20 '
+            '-id hqvlan30 '
+            '-id hqvlan40 '
+            '-id hqvlan50 '
+            '-id hqvlan60 '
+            '-id hqvlan70 '
+            '-id hqvlan80 '
+            '-id hqvlan90 '
+            '-id hqvlan100 '
+            '-id hqvlan110 '
+            '-id hqvlan120 '
+            '10.1.1.164 &'
         )
 
     def configure(self):
@@ -202,6 +220,11 @@ class HQSite:
         # L3 switch trunk toward distribution
         self.mls.cmd(f'ovs-vsctl set port s5-eth1 vlan_mode=trunk trunks={allowedvlans}')
 
+        # Service ports on the L3 switch
+        self.mls.cmd(f'ovs-vsctl set port s5-eth3 tag={self.SERVERVLAN}')
+        self.mls.cmd(f'ovs-vsctl set port s5-eth4 tag={self.SERVERVLAN}')
+        self.mls.cmd(f'ovs-vsctl set port s5-eth5 tag={self.SERVERVLAN}')
+
         # Gateways / SVIs on the L3 switch
         for vlanid, gatewaycidr in self.SVIGATEWAYS.items():
             self.createsvi(vlanid, gatewaycidr)
@@ -215,9 +238,10 @@ class HQSite:
         self.gateway.setIP('10.1.2.2/30', intf='hqr-eth0')
         self.gateway.cmd('ip link set hqr-eth0 up')
 
-        # DNS server in VLAN 10
+        # Services in VLAN 200
         self.configuredns()
         self.configurehttp()
+        self.configuredhcp()
 
         # Routes
         self.mls.cmd('ip route replace default via 10.1.2.2')
