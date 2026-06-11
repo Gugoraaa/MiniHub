@@ -256,8 +256,41 @@ class Warehouse:
             '-i vlan998 '
             '192.168.104.10'
         )
+        self.mls.cmd('sleep 1')
+
+        self.start_dhcp_clients()
+        self.configureclientdns()
 
         return self
+
+    def configureclientdns(self):
+        for host in (
+            self.ic1, self.office1, self.recv1, self.ship1,
+            self.sec1, self.cam1, self.prt1, self.phone1, self.cam2
+        ):
+            host.cmd('echo "nameserver 10.1.1.162" > /etc/resolv.conf')
+
+    def start_dhcp_clients(self):
+        for host in (
+            self.ic1, self.office1, self.recv1, self.ship1,
+            self.sec1, self.cam1, self.prt1, self.phone1, self.cam2
+        ):
+            intf = host.defaultIntf().name
+            pid_path = f'tmp/dhclient-{host.name}.pid'
+            lease_path = f'tmp/dhclient-{host.name}.leases'
+            log_path = f'tmp/dhclient-{host.name}.log'
+
+            host.cmd(f'touch {lease_path} {log_path}')
+            host.cmd(f'test ! -f {pid_path} || kill $(cat {pid_path}) 2>/dev/null || true')
+            host.cmd(f'dhclient -4 -r -pf {pid_path} -lf {lease_path} {intf} >/dev/null 2>&1 || true')
+            host.cmd(f'ip addr flush dev {intf}')
+            host.cmd(f'ip link set {intf} up')
+            host.cmd(
+                f'timeout 20 dhclient -4 -1 -v '
+                f'-pf {pid_path} '
+                f'-lf {lease_path} '
+                f'{intf} >{log_path} 2>&1'
+            )
 
     def stop_services(self):
         """

@@ -48,28 +48,28 @@ class HQSite:
         self.mls = net.addSwitch('s5', cls=SwitchL3, failMode='standalone')
 
         # Floor 1 representative hosts
-        hit = net.addHost('hit', ip=None, privateDirs=['/etc/resolv.conf'])  # ip='10.1.0.2/27', defaultRoute='via 10.1.0.1'
-        hsales = net.addHost('hsales', ip='10.1.0.34/27', defaultRoute='via 10.1.0.33', privateDirs=['/etc/resolv.conf'])
-        hsec = net.addHost('hsec', ip='10.1.0.66/27', defaultRoute='via 10.1.0.65', privateDirs=['/etc/resolv.conf'])
+        hit = net.addHost('hit', ip=None, privateDirs=['/etc'])  # ip='10.1.0.2/27', defaultRoute='via 10.1.0.1'
+        hsales = net.addHost('hsales', ip='10.1.0.34/27', defaultRoute='via 10.1.0.33', privateDirs=['/etc'])
+        hsec = net.addHost('hsec', ip='10.1.0.66/27', defaultRoute='via 10.1.0.65', privateDirs=['/etc'])
 
         # Floor 2 representative hosts
-        hmgmt = net.addHost('hmgmt', ip='10.1.0.98/27', defaultRoute='via 10.1.0.97', privateDirs=['/etc/resolv.conf'])
-        hhr = net.addHost('hhr', ip='10.1.0.130/27', defaultRoute='via 10.1.0.129', privateDirs=['/etc/resolv.conf'])
-        hfin = net.addHost('hfin', ip='10.1.0.162/27', defaultRoute='via 10.1.0.161', privateDirs=['/etc/resolv.conf'])
+        hmgmt = net.addHost('hmgmt', ip='10.1.0.98/27', defaultRoute='via 10.1.0.97', privateDirs=['/etc'])
+        hhr = net.addHost('hhr', ip='10.1.0.130/27', defaultRoute='via 10.1.0.129', privateDirs=['/etc'])
+        hfin = net.addHost('hfin', ip='10.1.0.162/27', defaultRoute='via 10.1.0.161', privateDirs=['/etc'])
 
         # Floor 3 representative hosts
-        hinv = net.addHost('hinv', ip='10.1.0.194/27', defaultRoute='via 10.1.0.193', privateDirs=['/etc/resolv.conf'])
-        hcust = net.addHost('hcust', ip='10.1.1.2/27', defaultRoute='via 10.1.1.1', privateDirs=['/etc/resolv.conf'])
-        hpurch = net.addHost('hpurch', ip='10.1.1.34/27', defaultRoute='via 10.1.1.33', privateDirs=['/etc/resolv.conf'])
+        hinv = net.addHost('hinv', ip='10.1.0.194/27', defaultRoute='via 10.1.0.193', privateDirs=['/etc'])
+        hcust = net.addHost('hcust', ip='10.1.1.2/27', defaultRoute='via 10.1.1.1', privateDirs=['/etc'])
+        hpurch = net.addHost('hpurch', ip='10.1.1.34/27', defaultRoute='via 10.1.1.33', privateDirs=['/etc'])
 
         # Floor 4 representative hosts
-        hcam = net.addHost('hcam', ip='10.1.1.66/27', defaultRoute='via 10.1.1.65', privateDirs=['/etc/resolv.conf'])
-        hprint = net.addHost('hprint', ip='10.1.1.98/27', defaultRoute='via 10.1.1.97', privateDirs=['/etc/resolv.conf'])
-        hphone = net.addHost('hphone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129', privateDirs=['/etc/resolv.conf'])
+        hcam = net.addHost('hcam', ip='10.1.1.66/27', defaultRoute='via 10.1.1.65', privateDirs=['/etc'])
+        hprint = net.addHost('hprint', ip='10.1.1.98/27', defaultRoute='via 10.1.1.97', privateDirs=['/etc'])
+        hphone = net.addHost('hphone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129', privateDirs=['/etc'])
 
         # Infrastructure servers for HQ
         self.hdns = net.addHost('hdns', ip='10.1.1.162/27', defaultRoute='via 10.1.1.161')
-        self.hweb = net.addHost('hweb', ip='10.1.1.163/27', defaultRoute='via 10.1.1.161', privateDirs=['/etc/resolv.conf'])
+        self.hweb = net.addHost('hweb', ip='10.1.1.163/27', defaultRoute='via 10.1.1.161', privateDirs=['/etc'])
         self.hdhcp = net.addHost('dhcphq', ip='10.1.1.164/27', defaultRoute='via 10.1.1.161')
 
         self.dnsclients = [

@@ -4,7 +4,6 @@ import os
 import subprocess
 
 from mininet.cli import CLI
-from mininet.link import TCLink
 from mininet.log import setLogLevel
 from mininet.net import Mininet
 from mininet.node import OVSSwitch
@@ -26,7 +25,6 @@ def buildmaster():
     net = Mininet(
         controller=None,
         switch=OVSSwitch,
-        link=TCLink,
         autoSetMacs=True,
         autoStaticArp=False,
     )

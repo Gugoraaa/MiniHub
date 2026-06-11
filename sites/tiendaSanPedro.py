@@ -68,18 +68,18 @@ class TiendaSanPedro:
         net.addLink(self.sp_hphone, s15, port2=2)
 
         # Access switches → distribution (trunk)
-        net.addLink(s13, s16, port1=10, port2=1, bw=1000)
-        net.addLink(s14, s16, port1=10, port2=2, bw=1000)
-        net.addLink(s15, s16, port1=10, port2=3, bw=1000)
+        net.addLink(s13, s16, port1=10, port2=1)
+        net.addLink(s14, s16, port1=10, port2=2)
+        net.addLink(s15, s16, port1=10, port2=3)
 
         # Distribution → core L3
-        net.addLink(s16, s17, port1=10, port2=1, bw=1000)
+        net.addLink(s16, s17, port1=10, port2=1)
 
         # Core → servidor DHCP
-        net.addLink(s17, self.dhcp.host, port1=4, intfName2='dhcp_sp-eth0', bw=1000)
+        net.addLink(s17, self.dhcp.host, port1=4, intfName2='dhcp_sp-eth0')
 
         # Core → router
-        net.addLink(s17, self.gateway, port1=24, intfName2='sp_r-eth0', bw=1000)
+        net.addLink(s17, self.gateway, port1=24, intfName2='sp_r-eth0')
 
         # Save references needed by configure()
         self.s17 = s17
@@ -99,6 +99,30 @@ class TiendaSanPedro:
         self.s17.cmd(f'ip addr flush dev {intf_name}')
         self.s17.cmd(f'ip addr add {gateway_cidr} dev {intf_name}')
         self.s17.cmd(f'ip link set {intf_name} up')
+
+    def configureclientdns(self):
+        for host_name in self.SP_DHCP_HOSTS:
+            getattr(self, host_name).cmd('echo "nameserver 10.1.1.162" > /etc/resolv.conf')
+
+    def start_dhcp_clients(self):
+        for host_name in self.SP_DHCP_HOSTS:
+            host = getattr(self, host_name)
+            intf = host.defaultIntf().name
+            pid_path = f'tmp/dhclient-{host_name}.pid'
+            lease_path = f'tmp/dhclient-{host_name}.leases'
+            log_path = f'tmp/dhclient-{host_name}.log'
+
+            host.cmd(f'touch {lease_path} {log_path}')
+            host.cmd(f'test ! -f {pid_path} || kill $(cat {pid_path}) 2>/dev/null || true')
+            host.cmd(f'dhclient -4 -r -pf {pid_path} -lf {lease_path} {intf} >/dev/null 2>&1 || true')
+            host.cmd(f'ip addr flush dev {intf}')
+            host.cmd(f'ip link set {intf} up')
+            host.cmd(
+                f'timeout 20 dhclient -4 -1 -v '
+                f'-pf {pid_path} '
+                f'-lf {lease_path} '
+                f'{intf} >{log_path} 2>&1'
+            )
 
     def stop_services(self):
         self.s17.cmd('killall dhcrelay 2>/dev/null || true')
@@ -181,3 +205,7 @@ class TiendaSanPedro:
             '-i sp_vlan998 '
             '192.168.105.10'
         )
+        self.s17.cmd('sleep 1')
+
+        self.start_dhcp_clients()
+        self.configureclientdns()

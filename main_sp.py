@@ -1,6 +1,5 @@
 from mininet.net import Mininet
 from mininet.node import OVSSwitch
-from mininet.link import TCLink
 from mininet.cli import CLI
 from mininet.log import setLogLevel
 
@@ -86,7 +85,6 @@ def run():
     net = Mininet(
         controller=None,
         switch=OVSSwitch,
-        link=TCLink,
         autoSetMacs=True,
         autoStaticArp=False
     )
