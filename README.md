@@ -262,6 +262,44 @@ link r_t1 r_wh down                # cortar enlace directo T1-WH
 link r_t1 r_wh up                  # restaurar
 ```
 
+### Probar DHCP de HQ
+
+`hit` arranca sin IP para poder comprobar que el servidor DHCP de HQ asigna una
+dirección de la VLAN 10. Desde la CLI de Mininet:
+
+```text
+# Ver que hit todavía no tiene IPv4 asignada
+hit ip -br addr show hit-eth0
+
+# Pedir IP al DHCP de HQ
+hit dhclient -4 -v hit-eth0
+
+# Confirmar IP, ruta default y DNS recibido
+hit ip -br addr show hit-eth0
+hit ip route
+hit cat /etc/resolv.conf
+
+# Verificar que el servidor DHCP registró el lease
+dhcphq cat /var/lib/misc/dnsmasq.leases
+
+# Pruebas rápidas después de recibir IP
+hit ping -c 3 10.1.0.1
+hit ping -c 3 10.1.1.162
+hit nslookup web.hq.local 10.1.1.162
+```
+
+Resultado esperado: `hit` debe recibir una IP del rango `10.1.0.12-10.1.0.30`,
+ruta default `via 10.1.0.1` y DNS `10.1.1.162`.
+
+Si abres una terminal con `xterm hit`, el prompt puede seguir mostrando la ruta
+del proyecto. Para confirmar que sí estás dentro del host correcto, usa:
+
+```text
+ip -br addr
+```
+
+Debe aparecer una interfaz llamada `hit-eth0`.
+
 Lista completa con salidas esperadas en `results/comandos_validacion.md`.
 
 ---
