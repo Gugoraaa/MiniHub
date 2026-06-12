@@ -32,42 +32,42 @@ class HQSite:
         self.dnsclients = []
 
     def build(self, net):
-        # HQ router WAN
+
         self.gateway = net.addHost('hqr', cls=Router, ip=None)
 
-        # Distribution switch
+
         hdist = net.addSwitch('s0', failMode='standalone')
 
-        # Access switches - one per floor
+
         hf1 = net.addSwitch('s1', failMode='standalone')
         hf2 = net.addSwitch('s2', failMode='standalone')
         hf3 = net.addSwitch('s3', failMode='standalone')
         hf4 = net.addSwitch('s4', failMode='standalone')
 
-        # Switch capa 3 / multilayer
+
         self.mls = net.addSwitch('s5', cls=SwitchL3, failMode='standalone')
 
-        # Floor 1 representative hosts
-        hit = net.addHost('hit', ip=None, privateDirs=['/etc'])  # ip='10.1.0.2/27', defaultRoute='via 10.1.0.1'
+
+        hit = net.addHost('hit', ip=None, privateDirs=['/etc'])
         hsales = net.addHost('hsales', ip='10.1.0.34/27', defaultRoute='via 10.1.0.33', privateDirs=['/etc'])
         hsec = net.addHost('hsec', ip='10.1.0.66/27', defaultRoute='via 10.1.0.65', privateDirs=['/etc'])
 
-        # Floor 2 representative hosts
+
         hmgmt = net.addHost('hmgmt', ip='10.1.0.98/27', defaultRoute='via 10.1.0.97', privateDirs=['/etc'])
         hhr = net.addHost('hhr', ip='10.1.0.130/27', defaultRoute='via 10.1.0.129', privateDirs=['/etc'])
         hfin = net.addHost('hfin', ip='10.1.0.162/27', defaultRoute='via 10.1.0.161', privateDirs=['/etc'])
 
-        # Floor 3 representative hosts
+
         hinv = net.addHost('hinv', ip='10.1.0.194/27', defaultRoute='via 10.1.0.193', privateDirs=['/etc'])
         hcust = net.addHost('hcust', ip='10.1.1.2/27', defaultRoute='via 10.1.1.1', privateDirs=['/etc'])
         hpurch = net.addHost('hpurch', ip='10.1.1.34/27', defaultRoute='via 10.1.1.33', privateDirs=['/etc'])
 
-        # Floor 4 representative hosts
+
         hcam = net.addHost('hcam', ip='10.1.1.66/27', defaultRoute='via 10.1.1.65', privateDirs=['/etc'])
         hprint = net.addHost('hprint', ip='10.1.1.98/27', defaultRoute='via 10.1.1.97', privateDirs=['/etc'])
         hphone = net.addHost('hphone', ip='10.1.1.130/27', defaultRoute='via 10.1.1.129', privateDirs=['/etc'])
 
-        # Infrastructure servers for HQ
+
         self.hdns = net.addHost('hdns', ip='10.1.1.162/27', defaultRoute='via 10.1.1.161')
         self.hweb = net.addHost('hweb', ip='10.1.1.163/27', defaultRoute='via 10.1.1.161', privateDirs=['/etc'])
         self.hdhcp = net.addHost('dhcphq', ip='10.1.1.164/27', defaultRoute='via 10.1.1.161')
@@ -80,7 +80,7 @@ class HQSite:
             self.hweb,
         ]
 
-        # Host-to-access-switch links
+
         net.addLink(hit, hf1, port2=1)
         net.addLink(hsales, hf1, port2=2)
         net.addLink(hsec, hf1, port2=3)
@@ -97,20 +97,20 @@ class HQSite:
         net.addLink(hprint, hf4, port2=2)
         net.addLink(hphone, hf4, port2=3)
 
-        # Access switches to distribution
+
         net.addLink(hf1, hdist, port1=10, port2=1 )
         net.addLink(hf2, hdist, port1=10, port2=2)
         net.addLink(hf3, hdist, port1=10, port2=3 )
         net.addLink(hf4, hdist, port1=10, port2=4 )
 
-        # Distribution to L3 switch, then L3 switch to WAN router
+
         net.addLink(hdist, self.mls, port1=24, port2=1, )
         net.addLink(self.mls, self.gateway, port1=2, intfName2='hqr-eth0' )
         net.addLink(self.mls, self.hdns, port1=3, intfName2='hdns-eth0')
         net.addLink(self.mls, self.hweb, port1=4, intfName2='hweb-eth0')
         net.addLink(self.mls, self.hdhcp, port1=5, intfName2='dhcphq-eth0')
 
-        # Save switches needed later for configure()
+
         self.hdist = hdist
         self.hf1 = hf1
         self.hf2 = hf2
@@ -178,59 +178,59 @@ class HQSite:
     def configure(self):
         allowedvlans = ','.join(str(vlan) for vlan in self.VLANS)
 
-        # Ensure s5 routes between SVIs and transit segments.
+
         self.mls.cmd('sysctl -w net.ipv4.ip_forward=1')
         self.mls.cmd('sysctl -w net.ipv4.conf.all.rp_filter=0')
         self.mls.cmd('sysctl -w net.ipv4.conf.default.rp_filter=0')
         self.mls.cmd('iptables -P FORWARD ACCEPT')
         self.mls.cmd('iptables -F FORWARD')
 
-        # Access ports - Floor 1
+
         self.hf1.cmd('ovs-vsctl set port s1-eth1 tag=10')
         self.hf1.cmd('ovs-vsctl set port s1-eth2 tag=20')
         self.hf1.cmd('ovs-vsctl set port s1-eth3 tag=30')
         self.hf1.cmd('ovs-vsctl set port s1-eth4 tag=10')
         self.hf1.cmd(f'ovs-vsctl set port s1-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
-        # Access ports - Floor 2
+
         self.hf2.cmd('ovs-vsctl set port s2-eth1 tag=40')
         self.hf2.cmd('ovs-vsctl set port s2-eth2 tag=50')
         self.hf2.cmd('ovs-vsctl set port s2-eth3 tag=60')
         self.hf2.cmd(f'ovs-vsctl set port s2-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
-        # Access ports - Floor 3
+
         self.hf3.cmd('ovs-vsctl set port s3-eth1 tag=70')
         self.hf3.cmd('ovs-vsctl set port s3-eth2 tag=80')
         self.hf3.cmd('ovs-vsctl set port s3-eth3 tag=90')
         self.hf3.cmd(f'ovs-vsctl set port s3-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
-        # Access ports - Floor 4
+
         self.hf4.cmd('ovs-vsctl set port s4-eth1 tag=100')
         self.hf4.cmd('ovs-vsctl set port s4-eth2 tag=110')
         self.hf4.cmd('ovs-vsctl set port s4-eth3 tag=120')
         self.hf4.cmd(f'ovs-vsctl set port s4-eth10 vlan_mode=trunk trunks={allowedvlans}')
 
-        # Distribution trunks
+
         self.hdist.cmd(f'ovs-vsctl set port s0-eth1 vlan_mode=trunk trunks={allowedvlans}')
         self.hdist.cmd(f'ovs-vsctl set port s0-eth2 vlan_mode=trunk trunks={allowedvlans}')
         self.hdist.cmd(f'ovs-vsctl set port s0-eth3 vlan_mode=trunk trunks={allowedvlans}')
         self.hdist.cmd(f'ovs-vsctl set port s0-eth4 vlan_mode=trunk trunks={allowedvlans}')
         self.hdist.cmd(f'ovs-vsctl set port s0-eth24 vlan_mode=trunk trunks={allowedvlans}')
 
-        # L3 switch trunk toward distribution
+
         self.mls.cmd(f'ovs-vsctl set port s5-eth1 vlan_mode=trunk trunks={allowedvlans}')
 
-        # Service ports on the L3 switch
+
         self.mls.cmd(f'ovs-vsctl set port s5-eth3 tag={self.SERVERVLAN}')
         self.mls.cmd(f'ovs-vsctl set port s5-eth4 tag={self.SERVERVLAN}')
         self.mls.cmd(f'ovs-vsctl set port s5-eth5 tag={self.SERVERVLAN}')
 
-        # Gateways / SVIs on the L3 switch
+
         for vlanid, gatewaycidr in self.SVIGATEWAYS.items():
             self.createsvi(vlanid, gatewaycidr)
 
-        # Transit link L3 switch -> WAN router.
-        # s5-eth2 is an OVS access port; the IP lives on an internal SVI.
+
+
         self.mls.cmd(f'ovs-vsctl set port s5-eth2 tag={self.WANVLAN}')
         self.createsvi(self.WANVLAN, '10.1.2.1/30', intfname='hqwan')
 
@@ -238,12 +238,12 @@ class HQSite:
         self.gateway.setIP('10.1.2.2/30', intf='hqr-eth0')
         self.gateway.cmd('ip link set hqr-eth0 up')
 
-        # Services in VLAN 200
+
         self.configuredns()
         self.configurehttp()
         self.configuredhcp()
 
-        # Routes
+
         self.mls.cmd('ip route replace default via 10.1.2.2')
         self.gateway.cmd('ip route replace 10.1.0.0/23 via 10.1.2.1')
 

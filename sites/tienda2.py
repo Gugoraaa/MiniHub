@@ -15,13 +15,13 @@ class Tienda2:
     def __init__(self, net):
         self.net = net
 
-        # Switches
-        self.sw_piso1 = net.addSwitch('s10', failMode='standalone')  # Piso 1
-        self.sw_piso2 = net.addSwitch('s11', failMode='standalone')  # Piso 2
+
+        self.sw_piso1 = net.addSwitch('s10', failMode='standalone')
+        self.sw_piso2 = net.addSwitch('s11', failMode='standalone')
         self.mls = net.addSwitch('s12', cls=SwitchL3, failMode='standalone')
         self.r = net.addHost('r_t2', cls=Router, ip=None)
 
-        # Servidor DHCP Tienda 2
+
         self.dhcp = DHCPServer(
             net=net,
             name='dhcp_t2',
@@ -33,7 +33,7 @@ class Tienda2:
             log_path='tmp/dhcp_tienda2.log'
         )
 
-        # Checkout, Security y Shelfs -> switch piso 1
+
         self.checkout = net.addHost('checkout', ip=None)
         self.tprt = net.addHost('tprt', ip=None)
         self.cam_ck = net.addHost('cam_ck', ip=None)
@@ -43,31 +43,31 @@ class Tienda2:
         self.ap_sh = net.addHost('ap_sh', ip=None)
         self.cam_sh = net.addHost('cam_sh', ip=None)
 
-        net.addLink(self.checkout, self.sw_piso1)  # s10-eth1 VLAN 140
-        net.addLink(self.tprt, self.sw_piso1)      # s10-eth2 VLAN 110
-        net.addLink(self.cam_ck, self.sw_piso1)    # s10-eth3 VLAN 100
-        net.addLink(self.ap_sec, self.sw_piso1)    # s10-eth4 VLAN 130
-        net.addLink(self.alarm, self.sw_piso1)     # s10-eth5 VLAN 30
-        net.addLink(self.cam_se, self.sw_piso1)    # s10-eth6 VLAN 100
-        net.addLink(self.ap_sh, self.sw_piso1)     # s10-eth7 VLAN 130
-        net.addLink(self.cam_sh, self.sw_piso1)    # s10-eth8 VLAN 100
-        net.addLink(self.sw_piso1, self.mls)       # s10-eth9 <-> s12-eth1
+        net.addLink(self.checkout, self.sw_piso1)
+        net.addLink(self.tprt, self.sw_piso1)
+        net.addLink(self.cam_ck, self.sw_piso1)
+        net.addLink(self.ap_sec, self.sw_piso1)
+        net.addLink(self.alarm, self.sw_piso1)
+        net.addLink(self.cam_se, self.sw_piso1)
+        net.addLink(self.ap_sh, self.sw_piso1)
+        net.addLink(self.cam_sh, self.sw_piso1)
+        net.addLink(self.sw_piso1, self.mls)
 
-        # Oficina administrativa -> switch piso 2
+
         self.pc_admin = net.addHost('pc_admin', ip=None)
         self.phone = net.addHost('phone', ip=None)
         self.adprt = net.addHost('adprt', ip=None)
         self.cam_ad = net.addHost('cam_ad', ip=None)
 
-        net.addLink(self.pc_admin, self.sw_piso2)  # s11-eth1 VLAN 40
-        net.addLink(self.phone, self.sw_piso2)     # s11-eth2 VLAN 120
-        net.addLink(self.adprt, self.sw_piso2)     # s11-eth3 VLAN 110
-        net.addLink(self.cam_ad, self.sw_piso2)    # s11-eth4 VLAN 100
-        net.addLink(self.sw_piso2, self.mls)       # s11-eth5 <-> s12-eth2
+        net.addLink(self.pc_admin, self.sw_piso2)
+        net.addLink(self.phone, self.sw_piso2)
+        net.addLink(self.adprt, self.sw_piso2)
+        net.addLink(self.cam_ad, self.sw_piso2)
+        net.addLink(self.sw_piso2, self.mls)
 
-        # Servidor DHCP y salida hacia router
-        net.addLink(self.dhcp.host, self.mls, intfName1='dhcp_t2-eth0')  # dhcp_t2-eth0 <-> s12-eth3
-        net.addLink(self.mls, self.r, intfName2='r_t2-wan')              # s12-eth4
+
+        net.addLink(self.dhcp.host, self.mls, intfName1='dhcp_t2-eth0')
+        net.addLink(self.mls, self.r, intfName2='r_t2-wan')
 
     def client_hosts(self):
         return (
@@ -97,39 +97,39 @@ class Tienda2:
         self.mls.cmd('iptables -P FORWARD ACCEPT')
         self.mls.cmd('iptables -F FORWARD')
 
-        # Puertos access piso 1
-        self.sw_piso1.cmd('ovs-vsctl set port s10-eth1 tag=140')  # checkout
-        self.sw_piso1.cmd('ovs-vsctl set port s10-eth2 tag=110')  # impresoras ticket
-        self.sw_piso1.cmd('ovs-vsctl set port s10-eth3 tag=100')  # camaras checkout
-        self.sw_piso1.cmd('ovs-vsctl set port s10-eth4 tag=130')  # AP security
-        self.sw_piso1.cmd('ovs-vsctl set port s10-eth5 tag=30')   # alarmas
-        self.sw_piso1.cmd('ovs-vsctl set port s10-eth6 tag=100')  # camaras security
-        self.sw_piso1.cmd('ovs-vsctl set port s10-eth7 tag=130')  # AP shelfs
-        self.sw_piso1.cmd('ovs-vsctl set port s10-eth8 tag=100')  # camaras shelfs
+
+        self.sw_piso1.cmd('ovs-vsctl set port s10-eth1 tag=140')
+        self.sw_piso1.cmd('ovs-vsctl set port s10-eth2 tag=110')
+        self.sw_piso1.cmd('ovs-vsctl set port s10-eth3 tag=100')
+        self.sw_piso1.cmd('ovs-vsctl set port s10-eth4 tag=130')
+        self.sw_piso1.cmd('ovs-vsctl set port s10-eth5 tag=30')
+        self.sw_piso1.cmd('ovs-vsctl set port s10-eth6 tag=100')
+        self.sw_piso1.cmd('ovs-vsctl set port s10-eth7 tag=130')
+        self.sw_piso1.cmd('ovs-vsctl set port s10-eth8 tag=100')
         self.sw_piso1.cmd(f'ovs-vsctl set port s10-eth9 vlan_mode=trunk trunks={allowed}')
 
-        # Puertos access piso 2
-        self.sw_piso2.cmd('ovs-vsctl set port s11-eth1 tag=40')   # PCs admin
-        self.sw_piso2.cmd('ovs-vsctl set port s11-eth2 tag=120')  # telefono
-        self.sw_piso2.cmd('ovs-vsctl set port s11-eth3 tag=110')  # impresora admin
-        self.sw_piso2.cmd('ovs-vsctl set port s11-eth4 tag=100')  # camaras admin
+
+        self.sw_piso2.cmd('ovs-vsctl set port s11-eth1 tag=40')
+        self.sw_piso2.cmd('ovs-vsctl set port s11-eth2 tag=120')
+        self.sw_piso2.cmd('ovs-vsctl set port s11-eth3 tag=110')
+        self.sw_piso2.cmd('ovs-vsctl set port s11-eth4 tag=100')
         self.sw_piso2.cmd(f'ovs-vsctl set port s11-eth5 vlan_mode=trunk trunks={allowed}')
 
-        # Trunks y access directos en multilayer
+
         self.mls.cmd(f'ovs-vsctl set port s12-eth1 vlan_mode=trunk trunks={allowed}')
         self.mls.cmd(f'ovs-vsctl set port s12-eth2 vlan_mode=trunk trunks={allowed}')
-        self.mls.cmd(f'ovs-vsctl set port s12-eth3 tag={self.DHCP_VLAN}')  # DHCP server
+        self.mls.cmd(f'ovs-vsctl set port s12-eth3 tag={self.DHCP_VLAN}')
 
-        # Gateways de VLAN en el switch multilayer
-        self.create_svi(130, '10.3.0.1/24')    # Access points
-        self.create_svi(140, '10.3.1.1/27')    # Checkout
-        self.create_svi(40, '10.3.1.33/28')    # Admin / DHCP
-        self.create_svi(30, '10.3.1.49/28')    # Alarmas
-        self.create_svi(100, '10.3.1.65/28')   # Camaras
-        self.create_svi(110, '10.3.1.81/29')   # Impresoras
-        self.create_svi(120, '10.3.1.89/30')   # Telefonos
 
-        # Enlace multilayer -> servidor DHCP
+        self.create_svi(130, '10.3.0.1/24')
+        self.create_svi(140, '10.3.1.1/27')
+        self.create_svi(40, '10.3.1.33/28')
+        self.create_svi(30, '10.3.1.49/28')
+        self.create_svi(100, '10.3.1.65/28')
+        self.create_svi(110, '10.3.1.81/29')
+        self.create_svi(120, '10.3.1.89/30')
+
+
         self.create_svi(self.DHCP_VLAN, '192.168.103.254/24')
 
         self.dhcp.host.cmd('ip addr flush dev dhcp_t2-eth0')
@@ -137,7 +137,7 @@ class Tienda2:
         self.dhcp.host.cmd('ip link set dhcp_t2-eth0 up')
         self.dhcp.host.cmd('ip route replace default via 192.168.103.254')
 
-        # Enlace multilayer -> router
+
         self.mls.cmd('ip addr flush dev s12-eth4')
         self.mls.cmd('ip addr add 10.3.1.249/30 dev s12-eth4')
         self.mls.cmd('ip link set s12-eth4 up')
@@ -152,7 +152,7 @@ class Tienda2:
 
         self.dhcp.start()
 
-        # self.mls.cmd('killall dhcrelay 2>/dev/null || true')
+
         self.mls.cmd(
             'dhcrelay -4 '
             '-i t2_vlan130 '

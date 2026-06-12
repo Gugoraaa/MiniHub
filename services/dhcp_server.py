@@ -1,8 +1,4 @@
 class DHCPServer:
-    """
-    Servidor DHCP reutilizable usando dnsmasq con archivo .conf externo.
-    """
-
     def __init__(
         self,
         net,
